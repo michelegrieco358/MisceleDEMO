@@ -189,6 +189,10 @@ def initialize_state():
         st.session_state.out_recipe_tk125 = None
     if "out_recipe_tk126" not in st.session_state:
         st.session_state.out_recipe_tk126 = None
+    if "out_recipe_b_tk125" not in st.session_state:
+        st.session_state.out_recipe_b_tk125 = None
+    if "out_recipe_b_tk126" not in st.session_state:
+        st.session_state.out_recipe_b_tk126 = None
     if "show_add_comp_tk125" not in st.session_state:
         st.session_state.show_add_comp_tk125 = False
     if "show_add_comp_tk126" not in st.session_state:
@@ -397,84 +401,109 @@ def edit_source_tank_dialog(row_index: int, dialog_nonce: int):
         return
 
     row = st.session_state.source_tanks[row_index]
-    is_residue = "residuo" in str(row["tank"]).lower()
 
-    info_col, edit_col = st.columns(2, gap="large")
+    left_edit_col, right_edit_col = st.columns(2, gap="large")
 
-    with info_col:
-        st.markdown("#### Dati informativi")
-        st.text_input("Serbatoio", value=str(row["tank"]), disabled=True, key=f"info_tank_{dialog_nonce}")
-        st.text_input(
+    with left_edit_col:
+        st.markdown("#### Caratteristiche")
+        tank = st.text_input("Serbatoio", value=str(row.get("tank", "")), key=f"edit_tank_{dialog_nonce}")
+        qty_available = st.number_input(
             "Q.t\u00e0 disponibile",
-            value=f"{safe_info_text(row['qty_available'])} m3" if not is_missing(row["qty_available"]) else "\u2014",
-            disabled=True,
-            key=f"info_qty_{dialog_nonce}",
+            value=safe_int_input(row.get("qty_available")),
+            step=1,
+            key=f"edit_qty_available_{dialog_nonce}",
         )
-        st.text_input("COD", value=safe_info_text(row["cod"]), disabled=True, key=f"info_cod_{dialog_nonce}")
-        st.text_input("Cl", value=safe_info_text(row["cl"]), disabled=True, key=f"info_cl_{dialog_nonce}")
-        st.text_input("N", value=safe_info_text(row["n"]), disabled=True, key=f"info_n_{dialog_nonce}")
-        st.text_input("Boro", value=safe_info_text(row["boro"]), disabled=True, key=f"info_boro_{dialog_nonce}")
+        cod = st.number_input(
+            "COD",
+            value=safe_int_input(row.get("cod")),
+            step=1,
+            key=f"edit_cod_{dialog_nonce}",
+        )
+        solvents = st.number_input(
+            "Solventi",
+            value=safe_int_input(row.get("solvents")),
+            step=1,
+            key=f"edit_solvents_{dialog_nonce}",
+        )
+        cl = st.number_input(
+            "Cl",
+            value=safe_int_input(row.get("cl")),
+            step=1,
+            key=f"edit_cl_{dialog_nonce}",
+        )
+        n_value = st.number_input(
+            "N",
+            value=safe_int_input(row.get("n")),
+            step=1,
+            key=f"edit_n_{dialog_nonce}",
+        )
+        boro_default = 0.0
+        if not is_missing(row.get("boro")):
+            try:
+                boro_default = float(row.get("boro"))
+            except (TypeError, ValueError):
+                boro_default = 0.0
+        boro = st.number_input(
+            "Boro",
+            value=boro_default,
+            step=0.1,
+            format="%.1f",
+            key=f"edit_boro_{dialog_nonce}",
+        )
 
-    with edit_col:
-        st.markdown("#### Parametri modificabili")
+    with right_edit_col:
+        st.markdown("#### Vincoli e Preferenze")
         empty_tank = st.checkbox(
             "Svuota serbatoio",
-            value=bool(row["empty_tank"]),
-            disabled=is_residue,
+            value=bool(row.get("empty_tank")),
             key=f"edit_empty_tank_{dialog_nonce}",
         )
-        priority_options = ["Alta", "Media", "Bassa"]
-        if is_residue:
-            priority_options = [""]
-        current_priority = row["priority"] if row["priority"] in priority_options else ""
+        priority_options = ["", "Alta", "Media", "Bassa"]
+        current_priority = row.get("priority", "") if row.get("priority", "") in priority_options else ""
         priority = st.selectbox(
             "Priorit\u00e0",
             options=priority_options,
             index=priority_options.index(current_priority),
             format_func=lambda x: "\u2014" if x == "" else x,
-            disabled=is_residue,
             key=f"edit_priority_{dialog_nonce}",
         )
         incompatibility = st.text_input(
             "Incompatibilit\u00e0",
-            value=str(row["incompatibility"]),
+            value=str(row.get("incompatibility", "")),
             key=f"edit_incompatibility_{dialog_nonce}",
         )
         destination_options = [""] + get_selected_destination_tanks()
-        if is_residue:
-            destination_options = [""]
         current_destination = (
-            row["destination_tank"] if row["destination_tank"] in destination_options else ""
+            row.get("destination_tank", "") if row.get("destination_tank", "") in destination_options else ""
         )
         destination_tank = st.selectbox(
             "Serbatoio di destinazione",
             options=destination_options,
             index=destination_options.index(current_destination),
             format_func=lambda x: "\u2014" if x == "" else x,
-            disabled=is_residue,
             key=f"edit_destination_{dialog_nonce}",
         )
         transfer_volume = st.number_input(
             "Volume da trasferire",
-            value=safe_int_input(row["transfer_volume"]),
+            value=safe_int_input(row.get("transfer_volume")),
             step=1,
             key=f"edit_transfer_volume_{dialog_nonce}",
         )
         vol_min = st.number_input(
             "Vol. min",
-            value=safe_int_input(row["vol_min"]),
+            value=safe_int_input(row.get("vol_min")),
             step=1,
             key=f"edit_vol_min_{dialog_nonce}",
         )
         vol_max = st.number_input(
             "Vol. max",
-            value=safe_int_input(row["vol_max"]),
+            value=safe_int_input(row.get("vol_max")),
             step=1,
             key=f"edit_vol_max_{dialog_nonce}",
         )
         notes = st.text_area(
             "Note",
-            value=str(row["notes"]),
+            value=str(row.get("notes", "")),
             key=f"edit_notes_{dialog_nonce}",
         )
 
@@ -485,11 +514,17 @@ def edit_source_tank_dialog(row_index: int, dialog_nonce: int):
             st.rerun()
     with save_col:
         if st.button("Salva", width="stretch", type="primary", key=f"edit_save_{dialog_nonce}"):
-            if not is_residue:
-                st.session_state.source_tanks[row_index]["empty_tank"] = empty_tank
-                st.session_state.source_tanks[row_index]["priority"] = priority
+            st.session_state.source_tanks[row_index]["tank"] = str(tank).strip()
+            st.session_state.source_tanks[row_index]["qty_available"] = qty_available
+            st.session_state.source_tanks[row_index]["cod"] = cod
+            st.session_state.source_tanks[row_index]["solvents"] = solvents
+            st.session_state.source_tanks[row_index]["cl"] = cl
+            st.session_state.source_tanks[row_index]["n"] = n_value
+            st.session_state.source_tanks[row_index]["boro"] = boro
+            st.session_state.source_tanks[row_index]["empty_tank"] = empty_tank
+            st.session_state.source_tanks[row_index]["priority"] = priority
             st.session_state.source_tanks[row_index]["incompatibility"] = incompatibility
-            st.session_state.source_tanks[row_index]["destination_tank"] = "" if is_residue else destination_tank
+            st.session_state.source_tanks[row_index]["destination_tank"] = destination_tank
             st.session_state.source_tanks[row_index]["transfer_volume"] = transfer_volume
             st.session_state.source_tanks[row_index]["vol_min"] = vol_min
             st.session_state.source_tanks[row_index]["vol_max"] = vol_max
@@ -961,6 +996,13 @@ header[data-testid="stHeader"] {
     padding: 10px 12px 12px;
 }
 
+/* Keep "Confronto" visible as a fake/disabled tab in output view. */
+.st-key-output_recipe_box [data-baseweb="tab-list"] button:nth-child(3) {
+    pointer-events: none;
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
 /* Force stronger contrast on Glide Data Grid headers (Streamlit DataFrame/DataEditor). */
 [data-testid="stDataFrame"],
 [data-testid="stDataEditor"] {
@@ -1242,10 +1284,27 @@ if st.session_state.page_mode == "output":
         {"Componente": "S-01",           "Volume": 10, "COD": 52000, "Solventi": 780, "Boro": 4.2},
         {"Componente": "S-06",           "Volume":  8, "COD": 59000, "Solventi": 640, "Boro": 3.4},
     ]
+    _default_b_tk125 = [
+        {"Componente": "Residuo TK-125", "Volume": 14, "COD": 47000, "Solventi":  740, "Boro": 4.0},
+        {"Componente": "S-01",           "Volume": 16, "COD": 52000, "Solventi":  780, "Boro": 4.2},
+        {"Componente": "S-07",           "Volume": 18, "COD": 31000, "Solventi":   95, "Boro": 2.9},
+        {"Componente": "S-06",           "Volume":  6, "COD": 59000, "Solventi":  640, "Boro": 3.4},
+        {"Componente": "S-02",           "Volume":  3, "COD": 86000, "Solventi": 1320, "Boro": 4.5},
+    ]
+    _default_b_tk126 = [
+        {"Componente": "Residuo TK-126", "Volume": 10, "COD": 45500, "Solventi": 720, "Boro": 3.8},
+        {"Componente": "S-01",           "Volume": 15, "COD": 52000, "Solventi": 780, "Boro": 4.2},
+        {"Componente": "S-06",           "Volume":  7, "COD": 59000, "Solventi": 640, "Boro": 3.4},
+        {"Componente": "S-07",           "Volume":  8, "COD": 31000, "Solventi":  95, "Boro": 2.9},
+    ]
     if st.session_state.out_recipe_tk125 is None:
         st.session_state.out_recipe_tk125 = pd.DataFrame(_default_tk125)
     if st.session_state.out_recipe_tk126 is None:
         st.session_state.out_recipe_tk126 = pd.DataFrame(_default_tk126)
+    if st.session_state.out_recipe_b_tk125 is None:
+        st.session_state.out_recipe_b_tk125 = pd.DataFrame(_default_b_tk125)
+    if st.session_state.out_recipe_b_tk126 is None:
+        st.session_state.out_recipe_b_tk126 = pd.DataFrame(_default_b_tk126)
 
     def _recompute_quota(df):
         total = df["Volume"].sum()
@@ -1255,17 +1314,35 @@ if st.session_state.page_mode == "output":
 
     recipe_tk125 = _recompute_quota(st.session_state.out_recipe_tk125)
     recipe_tk126 = _recompute_quota(st.session_state.out_recipe_tk126)
+    recipe_b_tk125 = _recompute_quota(st.session_state.out_recipe_b_tk125)
+    recipe_b_tk126 = _recompute_quota(st.session_state.out_recipe_b_tk126)
 
     _vol_125_top = int(recipe_tk125["Volume"].sum())
     _vol_126_top = int(recipe_tk126["Volume"].sum())
+    _vol_125_b = int(recipe_b_tk125["Volume"].sum())
+    _vol_126_b = int(recipe_b_tk126["Volume"].sum())
     _cod_125_top = int((recipe_tk125["Volume"] * recipe_tk125["COD"]).sum() / _vol_125_top) if _vol_125_top > 0 else 0
     _cod_126_top = int((recipe_tk126["Volume"] * recipe_tk126["COD"]).sum() / _vol_126_top) if _vol_126_top > 0 else 0
+    _cod_125_b = int((recipe_b_tk125["Volume"] * recipe_b_tk125["COD"]).sum() / _vol_125_b) if _vol_125_b > 0 else 0
+    _cod_126_b = int((recipe_b_tk126["Volume"] * recipe_b_tk126["COD"]).sum() / _vol_126_b) if _vol_126_b > 0 else 0
     _sol_125_top = int((recipe_tk125["Volume"] * recipe_tk125["Solventi"]).sum() / _vol_125_top) if _vol_125_top > 0 else 0
     _sol_126_top = int((recipe_tk126["Volume"] * recipe_tk126["Solventi"]).sum() / _vol_126_top) if _vol_126_top > 0 else 0
+    _sol_125_b = int((recipe_b_tk125["Volume"] * recipe_b_tk125["Solventi"]).sum() / _vol_125_b) if _vol_125_b > 0 else 0
+    _sol_126_b = int((recipe_b_tk126["Volume"] * recipe_b_tk126["Solventi"]).sum() / _vol_126_b) if _vol_126_b > 0 else 0
     _COD_125_MIN, _COD_125_MAX = 44000, 48000
     _COD_126_MIN, _COD_126_MAX = 43000, 47000
     _cod_125_ok = _COD_125_MIN <= _cod_125_top <= _COD_125_MAX
     _cod_126_ok = _COD_126_MIN <= _cod_126_top <= _COD_126_MAX
+
+    def _range_esito(value, min_value, max_value):
+        if min_value <= value <= max_value:
+            return "Nel range", "esito-ok"
+        if value > max_value:
+            return "Fuori range (alto)", "esito-warn"
+        return "Fuori range (basso)", "esito-warn"
+
+    _esito_126_a, _esito_cls_126_a = _range_esito(_cod_126_top, _COD_126_MIN, _COD_126_MAX)
+    _esito_126_b, _esito_cls_126_b = _range_esito(_cod_126_b, _COD_126_MIN, _COD_126_MAX)
 
     st.markdown(
         '<div class="top-titlebar">Creazione e ottimizzazione miscele TOP — Risultato e confronto ricette</div>',
@@ -1292,7 +1369,10 @@ if st.session_state.page_mode == "output":
         with right_badges:
             _, rc = st.columns([0.1, 1.2], gap="small")
             with rc:
-                st.markdown('<div class="top-chip" style="float:right">Scenario A</div>', unsafe_allow_html=True)
+                st.markdown(
+                    f'<div class="top-chip" style="float:right">{st.session_state.current_scenario}</div>',
+                    unsafe_allow_html=True,
+                )
 
     kpi1, kpi2, kpi3, kpi4, kpi5, kpi6 = st.columns(6, gap="small")
     with kpi1:
@@ -1323,7 +1403,7 @@ if st.session_state.page_mode == "output":
                     st.markdown("""<div class="tank-target-box">
                         <div class="tank-target-row">
                             <span class="tgt-chip">COD target <b>44000 – 48000</b></span>
-                            <span class="tgt-chip">Solv max <b>800</b></span>
+                            <span class="tgt-chip">Solventi max <b>800</b></span>
                             <span class="tgt-chip">Vol min <b>40</b></span>
                             <span class="tgt-chip">Vol max <b>60</b></span>
                         </div>
@@ -1345,6 +1425,34 @@ if st.session_state.page_mode == "output":
                             "Quota %":   st.column_config.NumberColumn("Quota %",   format="%.1f", width="small"),
                         },
                     )
+                    if st.button("+ Aggiungi componente", key="btn_add_comp_tk125"):
+                        st.session_state.show_add_comp_tk125 = not st.session_state.show_add_comp_tk125
+                    if st.session_state.show_add_comp_tk125:
+                        _existing_125 = set(st.session_state.out_recipe_tk125["Componente"].tolist())
+                        _tank_opts_125 = [t["tank"] for t in st.session_state.source_tanks if t["tank"] not in _existing_125]
+                        _sel_col, _add_col, _ann_col = st.columns([2.5, 1, 1], gap="small")
+                        with _sel_col:
+                            _new_tank_125 = st.selectbox("Serbatoio", _tank_opts_125, key="add_comp_sel_tk125", label_visibility="collapsed")
+                        with _add_col:
+                            if st.button("Aggiungi", key="btn_add_comp_confirm_tk125"):
+                                _tank_data = next((t for t in st.session_state.source_tanks if t["tank"] == _new_tank_125), None)
+                                if _tank_data:
+                                    _new_row = pd.DataFrame([{
+                                        "Componente": _tank_data["tank"],
+                                        "Volume": 10,
+                                        "COD": safe_int_input(_tank_data.get("cod")),
+                                        "Solventi": safe_int_input(_tank_data.get("solvents")),
+                                        "Boro": _tank_data["boro"],
+                                    }])
+                                    st.session_state.out_recipe_tk125 = pd.concat(
+                                        [st.session_state.out_recipe_tk125, _new_row], ignore_index=True
+                                    )
+                                    st.session_state.show_add_comp_tk125 = False
+                                    st.rerun()
+                        with _ann_col:
+                            if st.button("Annulla", key="btn_add_comp_cancel_tk125"):
+                                st.session_state.show_add_comp_tk125 = False
+                                st.rerun()
                     _vol_125 = int(recipe_tk125["Volume"].sum())
                     _cod_125 = int((recipe_tk125["Volume"] * recipe_tk125["COD"]).sum() / _vol_125) if _vol_125 > 0 else 0
                     _sol_125 = int((recipe_tk125["Volume"] * recipe_tk125["Solventi"]).sum() / _vol_125) if _vol_125 > 0 else 0
@@ -1375,40 +1483,11 @@ if st.session_state.page_mode == "output":
                                     .drop(index=_si).reset_index(drop=True)
                                 )
                                 st.rerun()
-                    if st.button("+ Aggiungi componente", key="btn_add_comp_tk125"):
-                        st.session_state.show_add_comp_tk125 = not st.session_state.show_add_comp_tk125
-                    if st.session_state.show_add_comp_tk125:
-                        _existing_125 = set(st.session_state.out_recipe_tk125["Componente"].tolist())
-                        _tank_opts_125 = [t["tank"] for t in st.session_state.source_tanks if t["tank"] not in _existing_125]
-                        _sel_col, _add_col, _ann_col = st.columns([2.5, 1, 1], gap="small")
-                        with _sel_col:
-                            _new_tank_125 = st.selectbox("Serbatoio", _tank_opts_125, key="add_comp_sel_tk125", label_visibility="collapsed")
-                        with _add_col:
-                            if st.button("Aggiungi", key="btn_add_comp_confirm_tk125"):
-                                _tank_data = next((t for t in st.session_state.source_tanks if t["tank"] == _new_tank_125), None)
-                                if _tank_data:
-                                    _new_row = pd.DataFrame([{
-                                        "Componente": _tank_data["tank"],
-                                        "Volume": 10,
-                                        "COD": _tank_data["cod"] // 1000,
-                                        "Solventi": _tank_data["solvents"] // 10,
-                                        "Boro": _tank_data["boro"],
-                                    }])
-                                    st.session_state.out_recipe_tk125 = pd.concat(
-                                        [st.session_state.out_recipe_tk125, _new_row], ignore_index=True
-                                    )
-                                    st.session_state.show_add_comp_tk125 = False
-                                    st.rerun()
-                        with _ann_col:
-                            if st.button("Annulla", key="btn_add_comp_cancel_tk125"):
-                                st.session_state.show_add_comp_tk125 = False
-                                st.rerun()
-
                 with tank_126:
                     st.markdown("""<div class="tank-target-box">
                         <div class="tank-target-row">
                             <span class="tgt-chip">COD target <b>43000 – 47000</b></span>
-                            <span class="tgt-chip">Solv max <b>750</b></span>
+                            <span class="tgt-chip">Solventi max <b>750</b></span>
                             <span class="tgt-chip">Vol min <b>20</b></span>
                             <span class="tgt-chip">Vol max <b>40</b></span>
                         </div>
@@ -1430,6 +1509,34 @@ if st.session_state.page_mode == "output":
                             "Quota %":   st.column_config.NumberColumn("Quota %",   format="%.1f", width="small"),
                         },
                     )
+                    if st.button("+ Aggiungi componente", key="btn_add_comp_tk126"):
+                        st.session_state.show_add_comp_tk126 = not st.session_state.show_add_comp_tk126
+                    if st.session_state.show_add_comp_tk126:
+                        _existing_126 = set(st.session_state.out_recipe_tk126["Componente"].tolist())
+                        _tank_opts_126 = [t["tank"] for t in st.session_state.source_tanks if t["tank"] not in _existing_126]
+                        _sel_col, _add_col, _ann_col = st.columns([2.5, 1, 1], gap="small")
+                        with _sel_col:
+                            _new_tank_126 = st.selectbox("Serbatoio", _tank_opts_126, key="add_comp_sel_tk126", label_visibility="collapsed")
+                        with _add_col:
+                            if st.button("Aggiungi", key="btn_add_comp_confirm_tk126"):
+                                _tank_data = next((t for t in st.session_state.source_tanks if t["tank"] == _new_tank_126), None)
+                                if _tank_data:
+                                    _new_row = pd.DataFrame([{
+                                        "Componente": _tank_data["tank"],
+                                        "Volume": 10,
+                                        "COD": safe_int_input(_tank_data.get("cod")),
+                                        "Solventi": safe_int_input(_tank_data.get("solvents")),
+                                        "Boro": _tank_data["boro"],
+                                    }])
+                                    st.session_state.out_recipe_tk126 = pd.concat(
+                                        [st.session_state.out_recipe_tk126, _new_row], ignore_index=True
+                                    )
+                                    st.session_state.show_add_comp_tk126 = False
+                                    st.rerun()
+                        with _ann_col:
+                            if st.button("Annulla", key="btn_add_comp_cancel_tk126"):
+                                st.session_state.show_add_comp_tk126 = False
+                                st.rerun()
                     _vol_126 = int(recipe_tk126["Volume"].sum())
                     _cod_126 = int((recipe_tk126["Volume"] * recipe_tk126["COD"]).sum() / _vol_126) if _vol_126 > 0 else 0
                     _sol_126 = int((recipe_tk126["Volume"] * recipe_tk126["Solventi"]).sum() / _vol_126) if _vol_126 > 0 else 0
@@ -1460,36 +1567,7 @@ if st.session_state.page_mode == "output":
                                     .drop(index=_si).reset_index(drop=True)
                                 )
                                 st.rerun()
-                    if st.button("+ Aggiungi componente", key="btn_add_comp_tk126"):
-                        st.session_state.show_add_comp_tk126 = not st.session_state.show_add_comp_tk126
-                    if st.session_state.show_add_comp_tk126:
-                        _existing_126 = set(st.session_state.out_recipe_tk126["Componente"].tolist())
-                        _tank_opts_126 = [t["tank"] for t in st.session_state.source_tanks if t["tank"] not in _existing_126]
-                        _sel_col, _add_col, _ann_col = st.columns([2.5, 1, 1], gap="small")
-                        with _sel_col:
-                            _new_tank_126 = st.selectbox("Serbatoio", _tank_opts_126, key="add_comp_sel_tk126", label_visibility="collapsed")
-                        with _add_col:
-                            if st.button("Aggiungi", key="btn_add_comp_confirm_tk126"):
-                                _tank_data = next((t for t in st.session_state.source_tanks if t["tank"] == _new_tank_126), None)
-                                if _tank_data:
-                                    _new_row = pd.DataFrame([{
-                                        "Componente": _tank_data["tank"],
-                                        "Volume": 10,
-                                        "COD": _tank_data["cod"] // 1000,
-                                        "Solventi": _tank_data["solvents"] // 10,
-                                        "Boro": _tank_data["boro"],
-                                    }])
-                                    st.session_state.out_recipe_tk126 = pd.concat(
-                                        [st.session_state.out_recipe_tk126, _new_row], ignore_index=True
-                                    )
-                                    st.session_state.show_add_comp_tk126 = False
-                                    st.rerun()
-                        with _ann_col:
-                            if st.button("Annulla", key="btn_add_comp_cancel_tk126"):
-                                st.session_state.show_add_comp_tk126 = False
-                                st.rerun()
-
-                st.markdown('<div class="right-main-title" style="margin-top:16px">Parametri attesi in uscita da TOP</div>', unsafe_allow_html=True)
+                st.markdown('<div class="right-main-title" style="margin-top:16px">Parametri attesi in ingresso e uscita da Top</div>', unsafe_allow_html=True)
                 ab_l, ab_m, ab_r, _ = st.columns([2.0, 0.7, 0.3, 5.0], gap="small")
                 with ab_l:
                     st.markdown('<p style="font-size:12px;color:#546273;margin:0;padding-top:8px">Abbattimento COD previsto</p>', unsafe_allow_html=True)
@@ -1519,10 +1597,87 @@ if st.session_state.page_mode == "output":
                     </div>""", unsafe_allow_html=True)
 
             with tab_b:
-                st.markdown('<div style="color:#8b97a4;font-size:13px;padding:20px 4px">Scenario B — configurazione alternativa non ancora definita.</div>', unsafe_allow_html=True)
+                tank_125_b, tank_126_b = st.tabs(["TK-125", "TK-126"])
 
-            with tab_cmp:
-                st.markdown('<div style="color:#8b97a4;font-size:13px;padding:20px 4px">Confronto — seleziona due ricette per confrontarle.</div>', unsafe_allow_html=True)
+                with tank_125_b:
+                    st.markdown("""<div class="tank-target-box">
+                        <div class="tank-target-row">
+                            <span class="tgt-chip">COD target <b>44000 – 48000</b></span>
+                            <span class="tgt-chip">Solventi max <b>800</b></span>
+                            <span class="tgt-chip">Vol min <b>40</b></span>
+                            <span class="tgt-chip">Vol max <b>60</b></span>
+                        </div>
+                    </div>""", unsafe_allow_html=True)
+                    st.markdown('<div class="out-section-label" style="margin-top:10px">Componenti proposti</div>', unsafe_allow_html=True)
+                    st.dataframe(
+                        recipe_b_tk125,
+                        width="stretch",
+                        hide_index=True,
+                        height=215,
+                        column_config={
+                            "Componente": st.column_config.TextColumn("Componente", width="medium"),
+                            "Volume":    st.column_config.NumberColumn("Volume",    format="%d",   width="small"),
+                            "COD":       st.column_config.NumberColumn("COD",       format="%d",   width="small"),
+                            "Solventi":  st.column_config.NumberColumn("Solventi",  format="%d",   width="small"),
+                            "Boro":      st.column_config.NumberColumn("Boro",      format="%.1f", width="small"),
+                            "Quota %":   st.column_config.NumberColumn("Quota %",   format="%.1f", width="small"),
+                        },
+                    )
+                    st.markdown(f"""<div class="tank-summary-row">
+                        <span>Volume finale <b>{_vol_125_b} m3</b></span>
+                        <span>COD miscela <b style="color:#2f5bb4">{_cod_125_b}</b></span>
+                        <span>Solventi <b>{_sol_125_b}</b></span>
+                    </div>""", unsafe_allow_html=True)
+
+                with tank_126_b:
+                    st.markdown("""<div class="tank-target-box">
+                        <div class="tank-target-row">
+                            <span class="tgt-chip">COD target <b>43000 – 47000</b></span>
+                            <span class="tgt-chip">Solventi max <b>750</b></span>
+                            <span class="tgt-chip">Vol min <b>20</b></span>
+                            <span class="tgt-chip">Vol max <b>40</b></span>
+                        </div>
+                    </div>""", unsafe_allow_html=True)
+                    st.markdown('<div class="out-section-label" style="margin-top:10px">Componenti proposti</div>', unsafe_allow_html=True)
+                    st.dataframe(
+                        recipe_b_tk126,
+                        width="stretch",
+                        hide_index=True,
+                        height=215,
+                        column_config={
+                            "Componente": st.column_config.TextColumn("Componente", width="medium"),
+                            "Volume":    st.column_config.NumberColumn("Volume",    format="%d",   width="small"),
+                            "COD":       st.column_config.NumberColumn("COD",       format="%d",   width="small"),
+                            "Solventi":  st.column_config.NumberColumn("Solventi",  format="%d",   width="small"),
+                            "Boro":      st.column_config.NumberColumn("Boro",      format="%.1f", width="small"),
+                            "Quota %":   st.column_config.NumberColumn("Quota %",   format="%.1f", width="small"),
+                        },
+                    )
+                    st.markdown(f"""<div class="tank-summary-row">
+                        <span>Volume finale <b>{_vol_126_b} m3</b></span>
+                        <span>COD miscela <b style="color:#e08c00">{_cod_126_b}</b></span>
+                        <span>Solventi <b>{_sol_126_b}</b></span>
+                    </div>""", unsafe_allow_html=True)
+
+                st.markdown('<div class="right-main-title" style="margin-top:16px">Parametri attesi in ingresso e uscita da Top</div>', unsafe_allow_html=True)
+                st.markdown(f'<p style="font-size:12px;color:#546273;margin:0 0 8px 0">Abbattimento COD previsto: <b>{abbatt_display}%</b></p>', unsafe_allow_html=True)
+                par_b_l, par_b_r = st.columns(2, gap="medium")
+                with par_b_l:
+                    st.markdown('<div class="tank-table-title">TK-125</div>', unsafe_allow_html=True)
+                    st.markdown(f"""<div class="param-list">
+                        <div class="param-row"><span>COD atteso miscela</span><b>{_cod_125_b}</b></div>
+                        <div class="param-row"><span>Solventi attesi</span><b>{_sol_125_b} mg/l</b></div>
+                        <div class="param-row"><span>Cl atteso</span><b>106</b></div>
+                        <div class="param-row"><span>COD atteso dopo abbattimento</span><b>{int(_cod_125_b * abbatt_display / 100)}</b></div>
+                    </div>""", unsafe_allow_html=True)
+                with par_b_r:
+                    st.markdown('<div class="tank-table-title">TK-126</div>', unsafe_allow_html=True)
+                    st.markdown(f"""<div class="param-list">
+                        <div class="param-row"><span>COD atteso miscela</span><b>{_cod_126_b}</b></div>
+                        <div class="param-row"><span>Solventi attesi</span><b>{_sol_126_b} mg/l</b></div>
+                        <div class="param-row"><span>Cl atteso</span><b>100</b></div>
+                        <div class="param-row"><span>COD atteso dopo abbattimento</span><b>{int(_cod_126_b * abbatt_display / 100)}</b></div>
+                    </div>""", unsafe_allow_html=True)
 
     with out_right:
         with st.container(key="out_right_confronto", width="stretch"):
@@ -1538,14 +1693,14 @@ if st.session_state.page_mode == "output":
                     <div class="cmp-card-title">Scenario A</div>
                     <div class="cmp-row">COD TK-126 <b style="color:#e08c00">{_cod_126_top}</b></div>
                     <div class="cmp-row">Solventi <b>{_sol_126_top} mg/l</b></div>
-                    <div class="cmp-row esito-ok">Esito &nbsp;<b>Nel range</b></div>
+                    <div class="cmp-row {_esito_cls_126_a}">Esito &nbsp;<b>{_esito_126_a}</b></div>
                 </div>""", unsafe_allow_html=True)
             with cb:
-                st.markdown("""<div class="cmp-card">
+                st.markdown(f"""<div class="cmp-card">
                     <div class="cmp-card-title">Scenario B</div>
-                    <div class="cmp-row">COD TK-126 <b style="color:#e08c00">48200</b></div>
-                    <div class="cmp-row">Solventi <b>820 mg/l</b></div>
-                    <div class="cmp-row esito-warn">Esito &nbsp;<b>Fuori range</b></div>
+                    <div class="cmp-row">COD TK-126 <b style="color:#e08c00">{_cod_126_b}</b></div>
+                    <div class="cmp-row">Solventi <b>{_sol_126_b} mg/l</b></div>
+                    <div class="cmp-row {_esito_cls_126_b}">Esito &nbsp;<b>{_esito_126_b}</b></div>
                 </div>""", unsafe_allow_html=True)
 
         with st.container(key="out_right_criticita", width="stretch"):
@@ -1611,7 +1766,15 @@ with toolbar:
                 st.session_state.source_tanks = build_empty_source_tanks()
                 st.session_state.selected_row_index = None
                 st.session_state.show_edit_dialog = False
+                st.session_state.show_cod_setting = False
                 st.session_state.cod_reduction_pct = 70
+                st.session_state.pop("abbatt_cod_output", None)
+                st.session_state.out_recipe_tk125 = None
+                st.session_state.out_recipe_tk126 = None
+                st.session_state.out_recipe_b_tk125 = None
+                st.session_state.out_recipe_b_tk126 = None
+                st.session_state.show_add_comp_tk125 = False
+                st.session_state.show_add_comp_tk126 = False
                 st.session_state.page_mode = "config"
 
         with btn_dup_col:
@@ -1947,3 +2110,4 @@ with right_main_box:
             """,
             unsafe_allow_html=True,
         )
+
