@@ -1230,19 +1230,17 @@ if st.session_state.page_mode == "output":
     abbatt_display = st.session_state.abbatt_cod_output
 
     _default_tk125 = [
-        {"Componente": "Residuo TK-125",    "Volume": 15, "COD": 790, "Solventi": 28, "Boro": 4.0},
-        {"Componente": "S-01",              "Volume": 30, "COD": 780, "Solventi": 20, "Boro": 4.2},
-        {"Componente": "S-09",              "Volume": 10, "COD": 610, "Solventi": 35, "Boro": 3.7},
-        {"Componente": "S-06",              "Volume": 10, "COD": 590, "Solventi": 42, "Boro": 3.4},
-        {"Componente": "S-11",              "Volume":  5, "COD": 650, "Solventi": 31, "Boro": 3.9},
-        {"Componente": "S-ALTA",            "Volume":  5, "COD":1800, "Solventi": 12, "Boro": 3.2},
+        {"Componente": "Residuo TK-125", "Volume": 15, "COD": 47000, "Solventi": 740, "Boro": 4.0},
+        {"Componente": "S-01",           "Volume": 18, "COD": 52000, "Solventi": 780, "Boro": 4.2},
+        {"Componente": "S-07",           "Volume": 17, "COD": 31000, "Solventi":  95, "Boro": 2.9},
+        {"Componente": "S-06",           "Volume":  5, "COD": 59000, "Solventi": 640, "Boro": 3.4},
+        {"Componente": "S-ALTA",         "Volume":  2, "COD":110000, "Solventi":2900, "Boro": 5.1},
     ]
     _default_tk126 = [
-        {"Componente": "S-04", "Volume": 40, "COD": 820, "Solventi":  18, "Boro": 4.8},
-        {"Componente": "S-07", "Volume": 10, "COD": 540, "Solventi":  60, "Boro": 2.9},
-        {"Componente": "S-10", "Volume": 12, "COD": 730, "Solventi": 110, "Boro": 4.1},
-        {"Componente": "S-02", "Volume": 15, "COD": 860, "Solventi":  85, "Boro": 4.5},
-        {"Componente": "S-05", "Volume": 10, "COD": 750, "Solventi":  70, "Boro": 4.1},
+        {"Componente": "Residuo TK-126", "Volume": 10, "COD": 45500, "Solventi": 720, "Boro": 3.8},
+        {"Componente": "S-07",           "Volume": 12, "COD": 31000, "Solventi":  95, "Boro": 2.9},
+        {"Componente": "S-01",           "Volume": 10, "COD": 52000, "Solventi": 780, "Boro": 4.2},
+        {"Componente": "S-06",           "Volume":  8, "COD": 59000, "Solventi": 640, "Boro": 3.4},
     ]
     if st.session_state.out_recipe_tk125 is None:
         st.session_state.out_recipe_tk125 = pd.DataFrame(_default_tk125)
@@ -1262,8 +1260,10 @@ if st.session_state.page_mode == "output":
     _vol_126_top = int(recipe_tk126["Volume"].sum())
     _cod_125_top = int((recipe_tk125["Volume"] * recipe_tk125["COD"]).sum() / _vol_125_top) if _vol_125_top > 0 else 0
     _cod_126_top = int((recipe_tk126["Volume"] * recipe_tk126["COD"]).sum() / _vol_126_top) if _vol_126_top > 0 else 0
-    _COD_125_MIN, _COD_125_MAX = 780, 820
-    _COD_126_MIN, _COD_126_MAX = 760, 800
+    _sol_125_top = int((recipe_tk125["Volume"] * recipe_tk125["Solventi"]).sum() / _vol_125_top) if _vol_125_top > 0 else 0
+    _sol_126_top = int((recipe_tk126["Volume"] * recipe_tk126["Solventi"]).sum() / _vol_126_top) if _vol_126_top > 0 else 0
+    _COD_125_MIN, _COD_125_MAX = 44000, 48000
+    _COD_126_MIN, _COD_126_MAX = 43000, 47000
     _cod_125_ok = _COD_125_MIN <= _cod_125_top <= _COD_125_MAX
     _cod_126_ok = _COD_126_MIN <= _cod_126_top <= _COD_126_MAX
 
@@ -1298,13 +1298,13 @@ if st.session_state.page_mode == "output":
     with kpi1:
         st.markdown('<div class="output-kpi"><div class="output-kpi-title">Serbatoi attivi</div><div class="output-kpi-value">2</div></div>', unsafe_allow_html=True)
     with kpi2:
-        st.markdown('<div class="output-kpi"><div class="output-kpi-title">Volume totale</div><div class="output-kpi-value">157 m3</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="output-kpi"><div class="output-kpi-title">Volume totale</div><div class="output-kpi-value">{_vol_125_top + _vol_126_top} m3</div></div>', unsafe_allow_html=True)
     with kpi3:
-        st.markdown('<div class="output-kpi"><div class="output-kpi-title">Componenti</div><div class="output-kpi-value">10</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="output-kpi"><div class="output-kpi-title">Componenti</div><div class="output-kpi-value">{len(recipe_tk125) + len(recipe_tk126)}</div></div>', unsafe_allow_html=True)
     with kpi4:
-        st.markdown('<div class="output-kpi"><div class="output-kpi-title">TK-125 COD target</div><div class="output-kpi-value">780–820</div></div>', unsafe_allow_html=True)
+        st.markdown('<div class="output-kpi"><div class="output-kpi-title">TK-125 COD target</div><div class="output-kpi-value">44000–48000</div></div>', unsafe_allow_html=True)
     with kpi5:
-        st.markdown('<div class="output-kpi"><div class="output-kpi-title">TK-126 COD target</div><div class="output-kpi-value">760–800</div></div>', unsafe_allow_html=True)
+        st.markdown('<div class="output-kpi"><div class="output-kpi-title">TK-126 COD target</div><div class="output-kpi-value">43000–47000</div></div>', unsafe_allow_html=True)
     with kpi6:
         st.markdown('<div class="output-kpi"><div class="output-kpi-title">Verifica vincoli</div><div class="output-kpi-value" style="color:#2e7d32">OK</div></div>', unsafe_allow_html=True)
 
@@ -1322,8 +1322,8 @@ if st.session_state.page_mode == "output":
                 with tank_125:
                     st.markdown("""<div class="tank-target-box">
                         <div class="tank-target-row">
-                            <span class="tgt-chip">COD target <b>780 – 820</b></span>
-                            <span class="tgt-chip">Solv max <b>120</b></span>
+                            <span class="tgt-chip">COD target <b>44000 – 48000</b></span>
+                            <span class="tgt-chip">Solv max <b>800</b></span>
                             <span class="tgt-chip">Vol min <b>40</b></span>
                             <span class="tgt-chip">Vol max <b>60</b></span>
                         </div>
@@ -1347,10 +1347,11 @@ if st.session_state.page_mode == "output":
                     )
                     _vol_125 = int(recipe_tk125["Volume"].sum())
                     _cod_125 = int((recipe_tk125["Volume"] * recipe_tk125["COD"]).sum() / _vol_125) if _vol_125 > 0 else 0
+                    _sol_125 = int((recipe_tk125["Volume"] * recipe_tk125["Solventi"]).sum() / _vol_125) if _vol_125 > 0 else 0
                     st.markdown(f"""<div class="tank-summary-row">
                         <span>Volume finale <b>{_vol_125} m3</b></span>
                         <span>COD miscela <b style="color:#2f5bb4">{_cod_125}</b></span>
-                        <span>Solventi <b>27</b></span>
+                        <span>Solventi <b>{_sol_125}</b></span>
                     </div>""", unsafe_allow_html=True)
                     _sel_rows_125 = _ev_125.selection.rows
                     if _sel_rows_125:
@@ -1406,8 +1407,8 @@ if st.session_state.page_mode == "output":
                 with tank_126:
                     st.markdown("""<div class="tank-target-box">
                         <div class="tank-target-row">
-                            <span class="tgt-chip">COD target <b>760 – 800</b></span>
-                            <span class="tgt-chip">Solv max <b>110</b></span>
+                            <span class="tgt-chip">COD target <b>43000 – 47000</b></span>
+                            <span class="tgt-chip">Solv max <b>750</b></span>
                             <span class="tgt-chip">Vol min <b>20</b></span>
                             <span class="tgt-chip">Vol max <b>40</b></span>
                         </div>
@@ -1431,10 +1432,11 @@ if st.session_state.page_mode == "output":
                     )
                     _vol_126 = int(recipe_tk126["Volume"].sum())
                     _cod_126 = int((recipe_tk126["Volume"] * recipe_tk126["COD"]).sum() / _vol_126) if _vol_126 > 0 else 0
+                    _sol_126 = int((recipe_tk126["Volume"] * recipe_tk126["Solventi"]).sum() / _vol_126) if _vol_126 > 0 else 0
                     st.markdown(f"""<div class="tank-summary-row">
                         <span>Volume finale <b>{_vol_126} m3</b></span>
                         <span>COD miscela <b style="color:#e08c00">{_cod_126}</b></span>
-                        <span>Solventi <b>59</b></span>
+                        <span>Solventi <b>{_sol_126}</b></span>
                     </div>""", unsafe_allow_html=True)
                     _sel_rows_126 = _ev_126.selection.rows
                     if _sel_rows_126:
@@ -1502,18 +1504,18 @@ if st.session_state.page_mode == "output":
                 with par_l:
                     st.markdown('<div class="tank-table-title">TK-125</div>', unsafe_allow_html=True)
                     st.markdown(f"""<div class="param-list">
-                        <div class="param-row"><span>COD atteso miscela</span><b>782</b></div>
-                        <div class="param-row"><span>Solventi attesi</span><b>27 mg/l</b></div>
+                        <div class="param-row"><span>COD atteso miscela</span><b>{_cod_125_top}</b></div>
+                        <div class="param-row"><span>Solventi attesi</span><b>{_sol_125_top} mg/l</b></div>
                         <div class="param-row"><span>Cl atteso</span><b>108</b></div>
-                        <div class="param-row"><span>COD atteso dopo abbattimento</span><b>{int(782 * abbatt_display / 100)}</b></div>
+                        <div class="param-row"><span>COD atteso dopo abbattimento</span><b>{int(_cod_125_top * abbatt_display / 100)}</b></div>
                     </div>""", unsafe_allow_html=True)
                 with par_r:
                     st.markdown('<div class="tank-table-title">TK-126</div>', unsafe_allow_html=True)
                     st.markdown(f"""<div class="param-list">
-                        <div class="param-row"><span>COD atteso miscela</span><b>801</b></div>
-                        <div class="param-row"><span>Solventi attesi</span><b>59 mg/l</b></div>
-                        <div class="param-row"><span>Cl atteso</span><b>111</b></div>
-                        <div class="param-row"><span>COD atteso dopo abbattimento</span><b>{int(801 * abbatt_display / 100)}</b></div>
+                        <div class="param-row"><span>COD atteso miscela</span><b>{_cod_126_top}</b></div>
+                        <div class="param-row"><span>Solventi attesi</span><b>{_sol_126_top} mg/l</b></div>
+                        <div class="param-row"><span>Cl atteso</span><b>98</b></div>
+                        <div class="param-row"><span>COD atteso dopo abbattimento</span><b>{int(_cod_126_top * abbatt_display / 100)}</b></div>
                     </div>""", unsafe_allow_html=True)
 
             with tab_b:
@@ -1532,17 +1534,17 @@ if st.session_state.page_mode == "output":
                 st.markdown('<div style="font-size:11px;color:#7b8794;margin-bottom:3px">Serbatoio di riferimento</div><div class="conf-chip-sel">TK-126</div>', unsafe_allow_html=True)
             ca, cb = st.columns(2, gap="small")
             with ca:
-                st.markdown("""<div class="cmp-card">
+                st.markdown(f"""<div class="cmp-card">
                     <div class="cmp-card-title">Scenario A</div>
-                    <div class="cmp-row">COD TK-126 <b style="color:#e08c00">801</b></div>
-                    <div class="cmp-row">Solventi <b>59 mg/l</b></div>
+                    <div class="cmp-row">COD TK-126 <b style="color:#e08c00">{_cod_126_top}</b></div>
+                    <div class="cmp-row">Solventi <b>{_sol_126_top} mg/l</b></div>
                     <div class="cmp-row esito-ok">Esito &nbsp;<b>Nel range</b></div>
                 </div>""", unsafe_allow_html=True)
             with cb:
                 st.markdown("""<div class="cmp-card">
                     <div class="cmp-card-title">Scenario B</div>
-                    <div class="cmp-row">COD TK-126 <b style="color:#e08c00">808</b></div>
-                    <div class="cmp-row">Solventi <b>105 mg/l</b></div>
+                    <div class="cmp-row">COD TK-126 <b style="color:#e08c00">48200</b></div>
+                    <div class="cmp-row">Solventi <b>820 mg/l</b></div>
                     <div class="cmp-row esito-warn">Esito &nbsp;<b>Fuori range</b></div>
                 </div>""", unsafe_allow_html=True)
 
