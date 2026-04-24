@@ -197,6 +197,10 @@ def initialize_state():
         st.session_state.show_add_comp_tk125 = False
     if "show_add_comp_tk126" not in st.session_state:
         st.session_state.show_add_comp_tk126 = False
+    if "output_compare_scenario" not in st.session_state:
+        st.session_state.output_compare_scenario = ""
+    if "output_has_scenario_a_plus" not in st.session_state:
+        st.session_state.output_has_scenario_a_plus = False
 initialize_state()
 
 
@@ -1297,14 +1301,40 @@ if st.session_state.page_mode == "output":
         {"Componente": "S-06",           "Volume":  7, "COD": 59000, "Solventi": 640, "Boro": 3.4},
         {"Componente": "S-07",           "Volume":  8, "COD": 31000, "Solventi":  95, "Boro": 2.9},
     ]
+    _compare_options = ["", "Scenario B", "Scenario C", "Scenario D", "Scenario E", "Scenario F"]
+    _base_compare_scenario = ""
+    if st.session_state.output_has_scenario_a_plus:
+        _current_scenario_label = str(st.session_state.current_scenario).strip()
+        _base_compare_scenario = _current_scenario_label.rstrip("+").strip()
+        if not _base_compare_scenario:
+            _base_compare_scenario = "Scenario A"
+        _compare_options = ["", _base_compare_scenario] + _compare_options[1:]
+    compare_choice = (
+        st.session_state.output_compare_scenario
+        if st.session_state.output_compare_scenario in _compare_options
+        else ""
+    )
+    if compare_choice != st.session_state.output_compare_scenario:
+        st.session_state.output_compare_scenario = compare_choice
+    compare_active = compare_choice != ""
+
     if st.session_state.out_recipe_tk125 is None:
         st.session_state.out_recipe_tk125 = pd.DataFrame(_default_tk125)
     if st.session_state.out_recipe_tk126 is None:
         st.session_state.out_recipe_tk126 = pd.DataFrame(_default_tk126)
-    if st.session_state.out_recipe_b_tk125 is None:
-        st.session_state.out_recipe_b_tk125 = pd.DataFrame(_default_b_tk125)
-    if st.session_state.out_recipe_b_tk126 is None:
-        st.session_state.out_recipe_b_tk126 = pd.DataFrame(_default_b_tk126)
+    if compare_active and st.session_state.out_recipe_b_tk125 is None:
+        if _base_compare_scenario and compare_choice == _base_compare_scenario:
+            st.session_state.out_recipe_b_tk125 = st.session_state.out_recipe_tk125.copy(deep=True)
+        else:
+            st.session_state.out_recipe_b_tk125 = pd.DataFrame(_default_b_tk125)
+    if compare_active and st.session_state.out_recipe_b_tk126 is None:
+        if _base_compare_scenario and compare_choice == _base_compare_scenario:
+            st.session_state.out_recipe_b_tk126 = st.session_state.out_recipe_tk126.copy(deep=True)
+        else:
+            st.session_state.out_recipe_b_tk126 = pd.DataFrame(_default_b_tk126)
+    if not compare_active:
+        st.session_state.out_recipe_b_tk125 = None
+        st.session_state.out_recipe_b_tk126 = None
 
     def _recompute_quota(df):
         total = df["Volume"].sum()
@@ -1312,10 +1342,11 @@ if st.session_state.page_mode == "output":
         df["Quota %"] = (df["Volume"] / total * 100).round(1) if total > 0 else 0.0
         return df
 
+    _empty_recipe = pd.DataFrame(columns=["Componente", "Volume", "COD", "Solventi", "Boro"])
     recipe_tk125 = _recompute_quota(st.session_state.out_recipe_tk125)
     recipe_tk126 = _recompute_quota(st.session_state.out_recipe_tk126)
-    recipe_b_tk125 = _recompute_quota(st.session_state.out_recipe_b_tk125)
-    recipe_b_tk126 = _recompute_quota(st.session_state.out_recipe_b_tk126)
+    recipe_b_tk125 = _recompute_quota(st.session_state.out_recipe_b_tk125 if st.session_state.out_recipe_b_tk125 is not None else _empty_recipe)
+    recipe_b_tk126 = _recompute_quota(st.session_state.out_recipe_b_tk126 if st.session_state.out_recipe_b_tk126 is not None else _empty_recipe)
 
     _vol_125_top = int(recipe_tk125["Volume"].sum())
     _vol_126_top = int(recipe_tk126["Volume"].sum())
@@ -1342,10 +1373,19 @@ if st.session_state.page_mode == "output":
         return "Fuori range (basso)", "esito-warn"
 
     _esito_126_a, _esito_cls_126_a = _range_esito(_cod_126_top, _COD_126_MIN, _COD_126_MAX)
-    _esito_126_b, _esito_cls_126_b = _range_esito(_cod_126_b, _COD_126_MIN, _COD_126_MAX)
+    if compare_active:
+        _esito_126_b, _esito_cls_126_b = _range_esito(_cod_126_b, _COD_126_MIN, _COD_126_MAX)
+        _compare_label = compare_choice
+        _cod_126_b_display = str(_cod_126_b)
+        _sol_126_b_display = f"{_sol_126_b} mg/l"
+    else:
+        _esito_126_b, _esito_cls_126_b = "Non valutato", ""
+        _compare_label = "Nessuna"
+        _cod_126_b_display = "-"
+        _sol_126_b_display = "-"
 
     st.markdown(
-        '<div class="top-titlebar">Creazione e ottimizzazione miscele TOP — Risultato e confronto ricette</div>',
+        '<div class="top-titlebar">Creazione e ottimizzazione miscele TOP — Risultato e confronto miscele</div>',
         unsafe_allow_html=True,
     )
 
@@ -1353,19 +1393,22 @@ if st.session_state.page_mode == "output":
     with output_toolbar:
         left_actions, right_badges = st.columns([3.5, 1.5], gap="small")
         with left_actions:
-            c1, c2, c3, c4, c5, _ = st.columns([1.4, 1.5, 1.5, 1.5, 1.8, 0.8], gap="small")
+            c1, c2, _ = st.columns([1.4, 1.5, 6.1], gap="small")
             with c1:
                 if st.button("Modifica scenario", width="content", key="btn_out_mod_scenario"):
                     st.session_state.page_mode = "config"
                     st.rerun()
             with c2:
-                st.button("Duplica Scenario", width="content", key="btn_out_dup")
-            with c3:
-                st.button("Export Risultati", width="content", key="btn_out_export")
-            with c4:
-                st.button("Export Report", width="content", key="btn_out_export_report")
-            with c5:
-                st.button("Conferma ricetta TOP", width="content", type="primary", key="btn_out_confirm")
+                if st.button("Duplica Scenario", width="content", key="btn_out_dup"):
+                    _base_scenario = str(st.session_state.current_scenario).strip().rstrip("+").strip()
+                    if not _base_scenario:
+                        _base_scenario = "Scenario A"
+                    st.session_state.out_recipe_b_tk125 = st.session_state.out_recipe_tk125.copy(deep=True)
+                    st.session_state.out_recipe_b_tk126 = st.session_state.out_recipe_tk126.copy(deep=True)
+                    st.session_state.output_has_scenario_a_plus = True
+                    st.session_state.current_scenario = f"{_base_scenario}+"
+                    st.session_state.output_compare_scenario = _base_scenario
+                    st.rerun()
         with right_badges:
             _, rc = st.columns([0.1, 1.2], gap="small")
             with rc:
@@ -1394,7 +1437,9 @@ if st.session_state.page_mode == "output":
         output_recipe_box = st.container(key="output_recipe_box", width="stretch")
         with output_recipe_box:
             st.markdown('<div class="right-main-title">Miscele TOP proposte</div>', unsafe_allow_html=True)
-            tab_a, tab_b, tab_cmp = st.tabs(["Scenario A", "Scenario B", "Confronto"])
+            tab_a_label = st.session_state.current_scenario
+            tab_b_label = compare_choice if compare_choice else "Scenario confronto"
+            tab_a, tab_b, tab_cmp = st.tabs([tab_a_label, tab_b_label, "Confronto"])
 
             with tab_a:
                 tank_125, tank_126 = st.tabs(["TK-125", "TK-126"])
@@ -1597,114 +1642,128 @@ if st.session_state.page_mode == "output":
                     </div>""", unsafe_allow_html=True)
 
             with tab_b:
-                tank_125_b, tank_126_b = st.tabs(["TK-125", "TK-126"])
+                if not compare_active:
+                    st.markdown('<div style="color:#8b97a4;font-size:13px;padding:20px 4px">Nessuna miscela di confronto selezionata. Seleziona una miscela dal box "Confronto miscele" nella barra laterale destra.</div>', unsafe_allow_html=True)
+                else:
+                    tank_125_b, tank_126_b = st.tabs(["TK-125", "TK-126"])
 
-                with tank_125_b:
-                    st.markdown("""<div class="tank-target-box">
-                        <div class="tank-target-row">
-                            <span class="tgt-chip">COD target <b>44000 – 48000</b></span>
-                            <span class="tgt-chip">Solventi max <b>800</b></span>
-                            <span class="tgt-chip">Vol min <b>40</b></span>
-                            <span class="tgt-chip">Vol max <b>60</b></span>
-                        </div>
-                    </div>""", unsafe_allow_html=True)
-                    st.markdown('<div class="out-section-label" style="margin-top:10px">Componenti proposti</div>', unsafe_allow_html=True)
-                    st.dataframe(
-                        recipe_b_tk125,
-                        width="stretch",
-                        hide_index=True,
-                        height=215,
-                        column_config={
-                            "Componente": st.column_config.TextColumn("Componente", width="medium"),
-                            "Volume":    st.column_config.NumberColumn("Volume",    format="%d",   width="small"),
-                            "COD":       st.column_config.NumberColumn("COD",       format="%d",   width="small"),
-                            "Solventi":  st.column_config.NumberColumn("Solventi",  format="%d",   width="small"),
-                            "Boro":      st.column_config.NumberColumn("Boro",      format="%.1f", width="small"),
-                            "Quota %":   st.column_config.NumberColumn("Quota %",   format="%.1f", width="small"),
-                        },
-                    )
-                    st.markdown(f"""<div class="tank-summary-row">
-                        <span>Volume finale <b>{_vol_125_b} m3</b></span>
-                        <span>COD miscela <b style="color:#2f5bb4">{_cod_125_b}</b></span>
-                        <span>Solventi <b>{_sol_125_b}</b></span>
-                    </div>""", unsafe_allow_html=True)
+                    with tank_125_b:
+                        st.markdown("""<div class="tank-target-box">
+                            <div class="tank-target-row">
+                                <span class="tgt-chip">COD target <b>44000 – 48000</b></span>
+                                <span class="tgt-chip">Solventi max <b>800</b></span>
+                                <span class="tgt-chip">Vol min <b>40</b></span>
+                                <span class="tgt-chip">Vol max <b>60</b></span>
+                            </div>
+                        </div>""", unsafe_allow_html=True)
+                        st.markdown('<div class="out-section-label" style="margin-top:10px">Componenti proposti</div>', unsafe_allow_html=True)
+                        st.dataframe(
+                            recipe_b_tk125,
+                            width="stretch",
+                            hide_index=True,
+                            height=215,
+                            column_config={
+                                "Componente": st.column_config.TextColumn("Componente", width="medium"),
+                                "Volume":    st.column_config.NumberColumn("Volume",    format="%d",   width="small"),
+                                "COD":       st.column_config.NumberColumn("COD",       format="%d",   width="small"),
+                                "Solventi":  st.column_config.NumberColumn("Solventi",  format="%d",   width="small"),
+                                "Boro":      st.column_config.NumberColumn("Boro",      format="%.1f", width="small"),
+                                "Quota %":   st.column_config.NumberColumn("Quota %",   format="%.1f", width="small"),
+                            },
+                        )
+                        st.markdown(f"""<div class="tank-summary-row">
+                            <span>Volume finale <b>{_vol_125_b} m3</b></span>
+                            <span>COD miscela <b style="color:#2f5bb4">{_cod_125_b}</b></span>
+                            <span>Solventi <b>{_sol_125_b}</b></span>
+                        </div>""", unsafe_allow_html=True)
 
-                with tank_126_b:
-                    st.markdown("""<div class="tank-target-box">
-                        <div class="tank-target-row">
-                            <span class="tgt-chip">COD target <b>43000 – 47000</b></span>
-                            <span class="tgt-chip">Solventi max <b>750</b></span>
-                            <span class="tgt-chip">Vol min <b>20</b></span>
-                            <span class="tgt-chip">Vol max <b>40</b></span>
-                        </div>
-                    </div>""", unsafe_allow_html=True)
-                    st.markdown('<div class="out-section-label" style="margin-top:10px">Componenti proposti</div>', unsafe_allow_html=True)
-                    st.dataframe(
-                        recipe_b_tk126,
-                        width="stretch",
-                        hide_index=True,
-                        height=215,
-                        column_config={
-                            "Componente": st.column_config.TextColumn("Componente", width="medium"),
-                            "Volume":    st.column_config.NumberColumn("Volume",    format="%d",   width="small"),
-                            "COD":       st.column_config.NumberColumn("COD",       format="%d",   width="small"),
-                            "Solventi":  st.column_config.NumberColumn("Solventi",  format="%d",   width="small"),
-                            "Boro":      st.column_config.NumberColumn("Boro",      format="%.1f", width="small"),
-                            "Quota %":   st.column_config.NumberColumn("Quota %",   format="%.1f", width="small"),
-                        },
-                    )
-                    st.markdown(f"""<div class="tank-summary-row">
-                        <span>Volume finale <b>{_vol_126_b} m3</b></span>
-                        <span>COD miscela <b style="color:#e08c00">{_cod_126_b}</b></span>
-                        <span>Solventi <b>{_sol_126_b}</b></span>
-                    </div>""", unsafe_allow_html=True)
+                    with tank_126_b:
+                        st.markdown("""<div class="tank-target-box">
+                            <div class="tank-target-row">
+                                <span class="tgt-chip">COD target <b>43000 – 47000</b></span>
+                                <span class="tgt-chip">Solventi max <b>750</b></span>
+                                <span class="tgt-chip">Vol min <b>20</b></span>
+                                <span class="tgt-chip">Vol max <b>40</b></span>
+                            </div>
+                        </div>""", unsafe_allow_html=True)
+                        st.markdown('<div class="out-section-label" style="margin-top:10px">Componenti proposti</div>', unsafe_allow_html=True)
+                        st.dataframe(
+                            recipe_b_tk126,
+                            width="stretch",
+                            hide_index=True,
+                            height=215,
+                            column_config={
+                                "Componente": st.column_config.TextColumn("Componente", width="medium"),
+                                "Volume":    st.column_config.NumberColumn("Volume",    format="%d",   width="small"),
+                                "COD":       st.column_config.NumberColumn("COD",       format="%d",   width="small"),
+                                "Solventi":  st.column_config.NumberColumn("Solventi",  format="%d",   width="small"),
+                                "Boro":      st.column_config.NumberColumn("Boro",      format="%.1f", width="small"),
+                                "Quota %":   st.column_config.NumberColumn("Quota %",   format="%.1f", width="small"),
+                            },
+                        )
+                        st.markdown(f"""<div class="tank-summary-row">
+                            <span>Volume finale <b>{_vol_126_b} m3</b></span>
+                            <span>COD miscela <b style="color:#e08c00">{_cod_126_b}</b></span>
+                            <span>Solventi <b>{_sol_126_b}</b></span>
+                        </div>""", unsafe_allow_html=True)
 
-                st.markdown('<div class="right-main-title" style="margin-top:16px">Parametri attesi in ingresso e uscita da Top</div>', unsafe_allow_html=True)
-                st.markdown(f'<p style="font-size:12px;color:#546273;margin:0 0 8px 0">Abbattimento COD previsto: <b>{abbatt_display}%</b></p>', unsafe_allow_html=True)
-                par_b_l, par_b_r = st.columns(2, gap="medium")
-                with par_b_l:
-                    st.markdown('<div class="tank-table-title">TK-125</div>', unsafe_allow_html=True)
-                    st.markdown(f"""<div class="param-list">
-                        <div class="param-row"><span>COD atteso miscela</span><b>{_cod_125_b}</b></div>
-                        <div class="param-row"><span>Solventi attesi</span><b>{_sol_125_b} mg/l</b></div>
-                        <div class="param-row"><span>Cl atteso</span><b>106</b></div>
-                        <div class="param-row"><span>COD atteso dopo abbattimento</span><b>{int(_cod_125_b * abbatt_display / 100)}</b></div>
-                    </div>""", unsafe_allow_html=True)
-                with par_b_r:
-                    st.markdown('<div class="tank-table-title">TK-126</div>', unsafe_allow_html=True)
-                    st.markdown(f"""<div class="param-list">
-                        <div class="param-row"><span>COD atteso miscela</span><b>{_cod_126_b}</b></div>
-                        <div class="param-row"><span>Solventi attesi</span><b>{_sol_126_b} mg/l</b></div>
-                        <div class="param-row"><span>Cl atteso</span><b>100</b></div>
-                        <div class="param-row"><span>COD atteso dopo abbattimento</span><b>{int(_cod_126_b * abbatt_display / 100)}</b></div>
-                    </div>""", unsafe_allow_html=True)
+                    st.markdown('<div class="right-main-title" style="margin-top:16px">Parametri attesi in ingresso e uscita da Top</div>', unsafe_allow_html=True)
+                    st.markdown(f'<p style="font-size:12px;color:#546273;margin:0 0 8px 0">Abbattimento COD previsto: <b>{abbatt_display}%</b></p>', unsafe_allow_html=True)
+                    par_b_l, par_b_r = st.columns(2, gap="medium")
+                    with par_b_l:
+                        st.markdown('<div class="tank-table-title">TK-125</div>', unsafe_allow_html=True)
+                        st.markdown(f"""<div class="param-list">
+                            <div class="param-row"><span>COD atteso miscela</span><b>{_cod_125_b}</b></div>
+                            <div class="param-row"><span>Solventi attesi</span><b>{_sol_125_b} mg/l</b></div>
+                            <div class="param-row"><span>Cl atteso</span><b>106</b></div>
+                            <div class="param-row"><span>COD atteso dopo abbattimento</span><b>{int(_cod_125_b * abbatt_display / 100)}</b></div>
+                        </div>""", unsafe_allow_html=True)
+                    with par_b_r:
+                        st.markdown('<div class="tank-table-title">TK-126</div>', unsafe_allow_html=True)
+                        st.markdown(f"""<div class="param-list">
+                            <div class="param-row"><span>COD atteso miscela</span><b>{_cod_126_b}</b></div>
+                            <div class="param-row"><span>Solventi attesi</span><b>{_sol_126_b} mg/l</b></div>
+                            <div class="param-row"><span>Cl atteso</span><b>100</b></div>
+                            <div class="param-row"><span>COD atteso dopo abbattimento</span><b>{int(_cod_126_b * abbatt_display / 100)}</b></div>
+                        </div>""", unsafe_allow_html=True)
 
     with out_right:
         with st.container(key="out_right_confronto", width="stretch"):
-            st.markdown('<div class="left-subpanel-title">Confronto ricette</div>', unsafe_allow_html=True)
+            st.markdown('<div class="left-subpanel-title">Confronto miscele</div>', unsafe_allow_html=True)
+            st.selectbox(
+                "Miscela di confronto",
+                options=_compare_options,
+                format_func=lambda x: "Seleziona miscela di confronto..." if x == "" else x,
+                key="output_compare_scenario",
+                label_visibility="collapsed",
+            )
             cr1, cr2 = st.columns(2, gap="small")
             with cr1:
-                st.markdown('<div style="font-size:11px;color:#7b8794;margin-bottom:3px">Ricetta da confrontare</div><div class="conf-chip-sel">Scenario B</div>', unsafe_allow_html=True)
+                st.markdown(
+                    f'<div style="font-size:11px;color:#7b8794;margin-bottom:3px">Miscela da confrontare</div>'
+                    f'<div class="conf-chip-sel">{_compare_label}</div>',
+                    unsafe_allow_html=True,
+                )
             with cr2:
                 st.markdown('<div style="font-size:11px;color:#7b8794;margin-bottom:3px">Serbatoio di riferimento</div><div class="conf-chip-sel">TK-126</div>', unsafe_allow_html=True)
             ca, cb = st.columns(2, gap="small")
             with ca:
                 st.markdown(f"""<div class="cmp-card">
-                    <div class="cmp-card-title">Scenario A</div>
+                    <div class="cmp-card-title">{st.session_state.current_scenario}</div>
                     <div class="cmp-row">COD TK-126 <b style="color:#e08c00">{_cod_126_top}</b></div>
                     <div class="cmp-row">Solventi <b>{_sol_126_top} mg/l</b></div>
                     <div class="cmp-row {_esito_cls_126_a}">Esito &nbsp;<b>{_esito_126_a}</b></div>
                 </div>""", unsafe_allow_html=True)
             with cb:
                 st.markdown(f"""<div class="cmp-card">
-                    <div class="cmp-card-title">Scenario B</div>
-                    <div class="cmp-row">COD TK-126 <b style="color:#e08c00">{_cod_126_b}</b></div>
-                    <div class="cmp-row">Solventi <b>{_sol_126_b} mg/l</b></div>
+                    <div class="cmp-card-title">{_compare_label if compare_active else "Scenario confronto"}</div>
+                    <div class="cmp-row">COD TK-126 <b style="color:#e08c00">{_cod_126_b_display}</b></div>
+                    <div class="cmp-row">Solventi <b>{_sol_126_b_display}</b></div>
                     <div class="cmp-row {_esito_cls_126_b}">Esito &nbsp;<b>{_esito_126_b}</b></div>
                 </div>""", unsafe_allow_html=True)
 
         with st.container(key="out_right_criticita", width="stretch"):
-            st.markdown('<div class="left-subpanel-title">Criticità di ricetta</div>', unsafe_allow_html=True)
+            st.markdown('<div class="left-subpanel-title">Criticità di miscela</div>', unsafe_allow_html=True)
             _crit_items = []
             if not _cod_125_ok:
                 _dir_125 = "superiore" if _cod_125_top > _COD_125_MAX else "inferiore"
@@ -1734,9 +1793,8 @@ if st.session_state.page_mode == "output":
 
         with st.container(key="out_right_azioni", width="stretch"):
             st.markdown('<div class="left-subpanel-title">Azioni sul risultato</div>', unsafe_allow_html=True)
-            if st.button("Modifica scenario", width="stretch", key="btn_out_mod_scenario_right"):
-                st.session_state.page_mode = "config"
-                st.rerun()
+            st.button("Export Risultati", width="stretch", key="btn_out_export_right")
+            st.button("Export Report", width="stretch", key="btn_out_export_report_right")
             st.button("Conferma ricetta TOP", width="stretch", type="primary", key="btn_out_confirm_right")
 
     st.stop()
@@ -1775,6 +1833,8 @@ with toolbar:
                 st.session_state.out_recipe_b_tk126 = None
                 st.session_state.show_add_comp_tk125 = False
                 st.session_state.show_add_comp_tk126 = False
+                st.session_state.output_compare_scenario = ""
+                st.session_state.output_has_scenario_a_plus = False
                 st.session_state.page_mode = "config"
 
         with btn_dup_col:
@@ -1801,6 +1861,10 @@ with toolbar:
                 key="btn_run_optimization",
             ):
                 if not build_coherence_issues():
+                    st.session_state.output_compare_scenario = ""
+                    st.session_state.output_has_scenario_a_plus = False
+                    st.session_state.out_recipe_b_tk125 = None
+                    st.session_state.out_recipe_b_tk126 = None
                     st.session_state.page_mode = "output"
                     st.session_state.show_edit_dialog = False
                     st.rerun()
@@ -1855,7 +1919,7 @@ with left_col:
         st.markdown(
             f"""
             <div class="recipe-card">
-                <div class="recipe-head">Impostazione ricetta</div>
+                <div class="recipe-head">Impostazioni miscele</div>
                 <div class="recipe-row">
                     <span class="recipe-label">Serbatoi destinazione attivi</span>
                     <span class="recipe-value">{", ".join(active_tanks) if active_tanks else "-"}</span>
@@ -2043,6 +2107,7 @@ with right_main_box:
         hide_index=True,
         height=360,
         column_config={
+            "Serbatoio": st.column_config.TextColumn("Serbatoio", width=120),
             "Note": st.column_config.TextColumn("Note", width="medium"),
         },
         on_select="rerun",
@@ -2110,4 +2175,3 @@ with right_main_box:
             """,
             unsafe_allow_html=True,
         )
-
