@@ -1,4 +1,4 @@
-import streamlit as st
+﻿import streamlit as st
 import pandas as pd
 from copy import deepcopy
 
@@ -6,88 +6,101 @@ st.set_page_config(page_title="Gestione Miscele - Configurazione", layout="wide"
 
 
 destination_tanks_default = [
-    {"selected": True,  "tank": "TK-125", "cod_range": "44000-48000", "solvents": 800, "v_min": 40, "v_max": 60},
-    {"selected": True,  "tank": "TK-126", "cod_range": "43000-47000", "solvents": 750, "v_min": 20, "v_max": 40},
+    {"selected": True,  "tank": "TK-125", "cod_range": "44000-48000", "solvents": 800, "v_min": 40, "v_max": 100},
+    {"selected": True,  "tank": "TK-126", "cod_range": "43000-47000", "solvents": 750, "v_min": 20, "v_max": 100},
     {"selected": False, "tank": "TK-127", "cod_range": "45000-49000", "solvents": 850, "v_min": 0,  "v_max": 30},
 ]
+
+TOP_TRANSFER_FIELDS = {
+    "TK-125": "transfer_tk125",
+    "TK-126": "transfer_tk126",
+    "TK-127": "transfer_tk127",
+}
 
 source_tanks_default = [
     {
         "tank": "S-01", "qty_available": 45, "cod": 52000, "solvents": 780, "boro": 4.2,
         "cl": 120, "n": 18,
-        "empty_tank": True, "priority": "Alta", "incompatibility": "",
-        "destination_tank": "TK-125", "transfer_volume": 20,
-        "vol_min": 20, "vol_max": 45, "notes": ""
+        "empty_tank": False, "priority": "", "incompatibility": "",
+        "destination_tank": "", "transfer_volume": 45, "transfer_tk125": 45,
+        "vol_min": None, "vol_max": None, "notes": ""
     },
     {
         "tank": "S-02", "qty_available": 42, "cod": 86000, "solvents": 1320, "boro": 4.5,
         "cl": 108, "n": 17,
-        "empty_tank": False, "priority": "Media", "incompatibility": "",
-        "destination_tank": "", "transfer_volume": 0,
-        "vol_min": 0, "vol_max": 32, "notes": ""
+        "empty_tank": False, "priority": "", "incompatibility": "",
+        "destination_tank": "", "transfer_volume": 42, "transfer_tk125": 20, "transfer_tk126": 22, "transfer_tk127": 0,
+        "vol_min": None, "vol_max": None, "notes": ""
     },
     {
         "tank": "S-03", "qty_available": 35, "cod": 118000, "solvents": 420, "boro": 3.1,
         "cl": 95, "n": 12,
         "empty_tank": False, "priority": "Media", "incompatibility": "S-08",
-        "destination_tank": "TK-126", "transfer_volume": 15,
+        "destination_tank": "", "transfer_volume": 0, "transfer_tk125": 0, "transfer_tk126": 0, "transfer_tk127": 0,
         "vol_min": 0, "vol_max": 25, "notes": ""
     },
     {
         "tank": "S-04", "qty_available": 50, "cod": 72000, "solvents": 1600, "boro": 4.8,
         "cl": 110, "n": 15,
         "empty_tank": False, "priority": "Alta", "incompatibility": "",
-        "destination_tank": "TK-126", "transfer_volume": 10,
+        "destination_tank": "", "transfer_volume": 0, "transfer_tk125": 0, "transfer_tk126": 0, "transfer_tk127": 0,
         "vol_min": 10, "vol_max": 40, "notes": ""
     },
     {
         "tank": "S-05", "qty_available": 38, "cod": 94000, "solvents": 980, "boro": 4.1,
         "cl": 102, "n": 16,
-        "empty_tank": False, "priority": "Alta", "incompatibility": "",
-        "destination_tank": "", "transfer_volume": 0,
-        "vol_min": 0, "vol_max": 28, "notes": ""
+        "empty_tank": True, "priority": "", "incompatibility": "",
+        "destination_tank": "", "transfer_volume": 0, "transfer_tk125": 0, "transfer_tk126": 0, "transfer_tk127": 0,
+        "vol_min": None, "vol_max": None, "notes": "residuo"
     },
     {
         "tank": "S-06", "qty_available": 33, "cod": 59000, "solvents": 640, "boro": 3.4,
         "cl": 92, "n": 13,
         "empty_tank": False, "priority": "Bassa", "incompatibility": "",
-        "destination_tank": "", "transfer_volume": 0,
-        "vol_min": 0, "vol_max": 22, "notes": ""
+        "destination_tank": "TK-126", "transfer_volume": 0, "transfer_tk125": 0, "transfer_tk126": 0, "transfer_tk127": 0,
+        "vol_min": None, "vol_max": None, "notes": ""
     },
     {
         "tank": "S-07", "qty_available": 30, "cod": 31000, "solvents": 95, "boro": 2.9,
         "cl": 88, "n": 10,
         "empty_tank": False, "priority": "Bassa", "incompatibility": "",
-        "destination_tank": "", "transfer_volume": 0,
+        "destination_tank": "TK-125", "transfer_volume": 0, "transfer_tk125": 0, "transfer_tk126": 0, "transfer_tk127": 0,
         "vol_min": 0, "vol_max": 20, "notes": ""
     },
     {
         "tank": "S-08", "qty_available": 25, "cod": 146000, "solvents": 5100, "boro": 6.1,
         "cl": 130, "n": 22,
         "empty_tank": True, "priority": "Alta", "incompatibility": "S-03",
-        "destination_tank": "", "transfer_volume": 12,
+        "destination_tank": "", "transfer_volume": 5, "transfer_tk125": 0, "transfer_tk126": 5, "transfer_tk127": 0,
         "vol_min": 15, "vol_max": 25, "notes": ""
     },
     {
         "tank": "S-09", "qty_available": 20, "cod": 68000, "solvents": 1150, "boro": 3.7,
         "cl": 90, "n": 20,
         "empty_tank": False, "priority": "Media", "incompatibility": "",
-        "destination_tank": "", "transfer_volume": 0,
+        "destination_tank": "", "transfer_volume": 5, "transfer_tk125": 5, "transfer_tk126": 0, "transfer_tk127": 0,
         "vol_min": 0, "vol_max": 15, "notes": "rifiuto da dosare"
     },
     {
         "tank": "TK-125 residuo", "qty_available": 5, "cod": 47000, "solvents": 740, "boro": 4.0,
-        "cl": 105, "n": 16,
+        "cl": None, "n": None,
         "empty_tank": False, "priority": "", "incompatibility": "",
-        "destination_tank": "", "transfer_volume": 5,
-        "vol_min": 15, "vol_max": 15, "notes": "residuo"
+        "destination_tank": "", "transfer_volume": 0, "transfer_tk125": 0, "transfer_tk126": 0, "transfer_tk127": 0,
+        "vol_min": None, "vol_max": None, "notes": "residuo"
     },
     {
         "tank": "TK-126 residuo", "qty_available": 0, "cod": 45500, "solvents": 720, "boro": 3.8,
-        "cl": 98, "n": 14,
+        "cl": None, "n": None,
         "empty_tank": False, "priority": "", "incompatibility": "",
-        "destination_tank": "", "transfer_volume": 0,
-        "vol_min": 0, "vol_max": 10, "notes": "residuo"
+        "destination_tank": "", "transfer_volume": 0, "transfer_tk125": 0, "transfer_tk126": 0, "transfer_tk127": 0,
+        "vol_min": None, "vol_max": None, "notes": "residuo"
+    },
+    {
+        "tank": "TK-127 residuo", "qty_available": 0, "cod": 46800, "solvents": 790, "boro": 3.9,
+        "cl": None, "n": None,
+        "empty_tank": False, "priority": "", "incompatibility": "",
+        "destination_tank": "", "transfer_volume": 0, "transfer_tk125": 0, "transfer_tk126": 0, "transfer_tk127": 0,
+        "vol_min": None, "vol_max": None, "notes": ""
     },
 ]
 
@@ -110,12 +123,75 @@ def build_empty_source_tanks():
                 "incompatibility": "",
                 "destination_tank": "",
                 "transfer_volume": None,
+                "transfer_tk125": None,
+                "transfer_tk126": None,
+                "transfer_tk127": None,
                 "vol_min": None,
                 "vol_max": None,
                 "notes": "residuo" if is_residue else "",
             }
         )
     return empty_rows
+
+
+def build_skysym_partial_source_tanks():
+    rows = []
+    for row in source_tanks_default:
+        is_residue = "residuo" in str(row.get("tank", "")).lower()
+        rows.append(
+            {
+                "tank": row.get("tank", ""),
+                "qty_available": row.get("qty_available"),
+                "cod": row.get("cod"),
+                "solvents": row.get("solvents"),
+                "boro": row.get("boro"),
+                "cl": None,
+                "n": None,
+                "empty_tank": False,
+                "priority": "",
+                "incompatibility": "",
+                "destination_tank": "",
+                "transfer_volume": None,
+                "transfer_tk125": None,
+                "transfer_tk126": None,
+                "transfer_tk127": None,
+                "vol_min": None,
+                "vol_max": None,
+                "notes": "residuo" if is_residue else "",
+            }
+        )
+    return rows
+
+
+def apply_skysym_top_fields_on_existing_rows(rows):
+    default_by_tank = {
+        str(row.get("tank", "")).strip(): row
+        for row in source_tanks_default
+        if str(row.get("tank", "")).strip()
+    }
+
+    updated_rows = []
+    for row in rows:
+        updated_row = deepcopy(row)
+        tank_name = str(updated_row.get("tank", "")).strip()
+        default_row = default_by_tank.get(tank_name)
+        if default_row:
+            updated_row["qty_available"] = default_row.get("qty_available")
+            updated_row["cod"] = default_row.get("cod")
+            updated_row["solvents"] = default_row.get("solvents")
+            updated_row["boro"] = default_row.get("boro")
+        updated_rows.append(updated_row)
+    return updated_rows
+
+
+def is_grid_empty_for_refresh(rows):
+    if not rows:
+        return True
+    for row in rows:
+        for key in ["qty_available", "cod", "solvents", "boro"]:
+            if not is_missing(row.get(key)):
+                return False
+    return True
 
 
 def build_simulation_source_tanks():
@@ -132,6 +208,7 @@ def build_simulation_source_tanks():
         "S-09": 4,
         "TK-125 residuo": 5,
         "TK-126 residuo": 0,
+        "TK-127 residuo": 0,
     }
 
     for row in sim_rows:
@@ -141,6 +218,43 @@ def build_simulation_source_tanks():
         row["destination_tank"] = ""
 
     return sim_rows
+
+
+def get_next_simulation_tank_name(source_rows):
+    used_tanks = {
+        str(row.get("tank", "")).strip().upper()
+        for row in source_rows
+        if str(row.get("tank", "")).strip()
+    }
+    idx = 1
+    while True:
+        candidate = f"S-{idx:02d}"
+        if candidate.upper() not in used_tanks:
+            return candidate
+        idx += 1
+
+
+def build_new_simulation_row(source_rows):
+    return {
+        "tank": "",
+        "qty_available": None,
+        "cod": None,
+        "solvents": None,
+        "boro": None,
+        "cl": None,
+        "n": None,
+        "empty_tank": False,
+        "priority": "",
+        "incompatibility": "",
+        "destination_tank": "",
+        "transfer_volume": None,
+        "transfer_tk125": None,
+        "transfer_tk126": None,
+        "transfer_tk127": None,
+        "vol_min": None,
+        "vol_max": None,
+        "notes": "",
+    }
 
 
 def get_active_source_tanks():
@@ -295,6 +409,28 @@ def enforce_destination_tank_rules():
             row["destination_tank"] = ""
             destination = ""
 
+        if not is_simulation_mode:
+            for field in TOP_TRANSFER_FIELDS.values():
+                if field not in row:
+                    row[field] = 0
+
+            # Backward compatibility: migrate legacy destination+volume into dedicated TK columns.
+            has_split_transfer = any(safe_int_input(row.get(field), 0) > 0 for field in TOP_TRANSFER_FIELDS.values())
+            legacy_volume = safe_int_input(row.get("transfer_volume"), 0)
+            if not has_split_transfer and destination in TOP_TRANSFER_FIELDS and legacy_volume > 0:
+                row[TOP_TRANSFER_FIELDS[destination]] = legacy_volume
+
+            for tank, field in TOP_TRANSFER_FIELDS.items():
+                if tank not in selected_tanks:
+                    row[field] = 0
+
+            row["destination_tank"] = destination
+            row["transfer_volume"] = sum(safe_int_input(row.get(field), 0) for field in TOP_TRANSFER_FIELDS.values())
+
+        if bool(row.get("empty_tank")):
+            row["vol_min"] = None
+            row["vol_max"] = None
+
         is_residue = "residuo" in str(row["tank"]).lower()
         if is_residue:
             row["empty_tank"] = False
@@ -325,6 +461,7 @@ def apply_simulation_demo_destinations():
         "S-04": "TK-125",
         "S-08": "TK-126",
         "TK-125 residuo": "TK-125",
+        "TK-127 residuo": "TK-125",
     }
     all_mode_map = {
         "S-01": "TK-125",
@@ -336,6 +473,7 @@ def apply_simulation_demo_destinations():
         "S-08": "S-10",
         "S-09": "S-12",
         "TK-125 residuo": "TK-126",
+        "TK-127 residuo": "S-11",
     }
     preferred_map = top_mode_map if destination_mode == "Serbatoi TOP" else all_mode_map
 
@@ -362,6 +500,7 @@ def sync_simulation_destination_mode():
 
 def build_coherence_issues():
     issues = []
+    is_simulation_mode = st.session_state.get("config_mode") == "simulation"
     for row in st.session_state.destination_tanks:
         if row["selected"] and row["v_min"] > row["v_max"]:
             issues.append(
@@ -379,14 +518,21 @@ def build_coherence_issues():
 
     destination_transfer_sum = {tank: 0.0 for tank in destination_vmax}
     for row in get_active_source_tanks():
-        dest = str(row.get("destination_tank", "")).strip()
-        if not dest or dest not in destination_transfer_sum:
+        if is_simulation_mode:
+            dest = str(row.get("destination_tank", "")).strip()
+            if not dest or dest not in destination_transfer_sum:
+                continue
+            try:
+                transfer_volume = float(row.get("transfer_volume", 0) or 0)
+            except (TypeError, ValueError):
+                transfer_volume = 0.0
+            destination_transfer_sum[dest] += transfer_volume
             continue
-        try:
-            transfer_volume = float(row.get("transfer_volume", 0) or 0)
-        except (TypeError, ValueError):
-            transfer_volume = 0.0
-        destination_transfer_sum[dest] += transfer_volume
+
+        for tank, field in TOP_TRANSFER_FIELDS.items():
+            if tank not in destination_transfer_sum:
+                continue
+            destination_transfer_sum[tank] += float(safe_int_input(row.get(field), 0))
 
     for tank, total_transfer in destination_transfer_sum.items():
         vmax = destination_vmax[tank]
@@ -394,32 +540,120 @@ def build_coherence_issues():
             issues.append(
                 f"{tank}: volume totale da trasferire {int(total_transfer)} m3 superiore al V max impostato {int(vmax)} m3"
             )
+
+    source_rows = get_active_source_tanks()
+    rows_by_tank = {
+        str(row.get("tank", "")).strip().upper(): row
+        for row in source_rows
+        if str(row.get("tank", "")).strip()
+    }
+
+    def get_destinations_with_volume(row):
+        if is_simulation_mode:
+            destination = str(row.get("destination_tank", "")).strip()
+            volume = safe_int_input(row.get("transfer_volume"), 0)
+            return {destination: volume} if destination and volume > 0 else {}
+
+        result = {}
+        for tank, field in TOP_TRANSFER_FIELDS.items():
+            volume = safe_int_input(row.get(field), 0)
+            if volume > 0:
+                result[tank] = volume
+        return result
+
+    def check_incompatibility_pair(tank_a: str, tank_b: str):
+        row_a = rows_by_tank.get(tank_a.upper())
+        row_b = rows_by_tank.get(tank_b.upper())
+        if not row_a or not row_b:
+            return
+
+        vols_a = get_destinations_with_volume(row_a)
+        vols_b = get_destinations_with_volume(row_b)
+        conflicting_destinations = sorted(set(vols_a).intersection(vols_b))
+        if not conflicting_destinations:
+            return
+
+        if len(conflicting_destinations) == 1:
+            issues.append(
+                f"Incompatibilita: {tank_a} e {tank_b} valorizzati entrambi su {conflicting_destinations[0]} con volume > 0"
+            )
+        else:
+            joined = ", ".join(conflicting_destinations)
+            issues.append(
+                f"Incompatibilita: {tank_a} e {tank_b} valorizzati entrambi sugli stessi serbatoi ({joined})"
+            )
+
+    processed_pairs = set()
+    for row in source_rows:
+        tank_name = str(row.get("tank", "")).strip()
+        if not tank_name:
+            continue
+
+        incompatibility_text = str(row.get("incompatibility", "") or "").strip()
+        if not incompatibility_text:
+            continue
+
+        incompatible_tanks = [
+            item.strip() for item in incompatibility_text.replace(";", ",").split(",") if item.strip()
+        ]
+        for incompatible_tank in incompatible_tanks:
+            pair_key = tuple(sorted([tank_name.upper(), incompatible_tank.upper()]))
+            if pair_key in processed_pairs:
+                continue
+            processed_pairs.add(pair_key)
+            check_incompatibility_pair(tank_name, incompatible_tank)
+
+    # Fallback esplicito per la regola demo richiesta: S-03 vs S-08.
+    demo_pair_key = tuple(sorted(["S-03", "S-08"]))
+    if demo_pair_key not in processed_pairs:
+        check_incompatibility_pair("S-03", "S-08")
     return issues
 
 
 def build_output_recipe_dataframe():
     rows = []
+    is_simulation_mode = st.session_state.get("config_mode") == "simulation"
     selected_destinations = set(get_selected_destination_tanks())
     for row in st.session_state.source_tanks:
-        destination = str(row.get("destination_tank", "")).strip()
-        if not destination:
+        if is_simulation_mode:
+            destination = str(row.get("destination_tank", "")).strip()
+            if not destination:
+                continue
+            if selected_destinations and destination not in selected_destinations:
+                continue
+            transfer_volume = safe_int_input(row.get("transfer_volume"), 0)
+            if transfer_volume <= 0:
+                continue
+            rows.append(
+                {
+                    "Serbatoio sorgente": row["tank"],
+                    "Serbatoio di destinazione": destination,
+                    "Volume trasferito": transfer_volume,
+                    "COD": safe_int_input(row.get("cod"), 0),
+                    "Solventi": safe_int_input(row.get("solvents"), 0),
+                    "Boro": float(row.get("boro", 0) or 0),
+                    "Note": str(row.get("notes", "")).strip() or "\u2014",
+                }
+            )
             continue
-        if selected_destinations and destination not in selected_destinations:
-            continue
-        transfer_volume = safe_int_input(row.get("transfer_volume"), 0)
-        if transfer_volume <= 0:
-            continue
-        rows.append(
-            {
-                "Serbatoio sorgente": row["tank"],
-                "Serbatoio di destinazione": destination,
-                "Volume trasferito": transfer_volume,
-                "COD": safe_int_input(row.get("cod"), 0),
-                "Solventi": safe_int_input(row.get("solvents"), 0),
-                "Boro": float(row.get("boro", 0) or 0),
-                "Note": str(row.get("notes", "")).strip() or "\u2014",
-            }
-        )
+
+        for destination, field in TOP_TRANSFER_FIELDS.items():
+            if selected_destinations and destination not in selected_destinations:
+                continue
+            transfer_volume = safe_int_input(row.get(field), 0)
+            if transfer_volume <= 0:
+                continue
+            rows.append(
+                {
+                    "Serbatoio sorgente": row["tank"],
+                    "Serbatoio di destinazione": destination,
+                    "Volume trasferito": transfer_volume,
+                    "COD": safe_int_input(row.get("cod"), 0),
+                    "Solventi": safe_int_input(row.get("solvents"), 0),
+                    "Boro": float(row.get("boro", 0) or 0),
+                    "Note": str(row.get("notes", "")).strip() or "\u2014",
+                }
+            )
 
     if not rows:
         fallback_destination = get_selected_destination_tanks()[0] if get_selected_destination_tanks() else "\u2014"
@@ -535,9 +769,9 @@ def edit_source_tank_dialog(row_index: int, dialog_nonce: int):
 
     with left_edit_col:
         st.markdown("#### Caratteristiche")
-        tank = st.text_input("Serbatoio", value=str(row.get("tank", "")), key=f"edit_tank_{dialog_nonce}")
+        source_tank_name = st.text_input("Serbatoio", value=str(row.get("tank", "")), key=f"edit_tank_{dialog_nonce}")
         qty_available = st.number_input(
-            "Q.t\u00e0 disponibile",
+            "Q.ta disponibile",
             value=safe_int_input(row.get("qty_available")),
             step=1,
             key=f"edit_qty_available_{dialog_nonce}",
@@ -590,50 +824,69 @@ def edit_source_tank_dialog(row_index: int, dialog_nonce: int):
         priority_options = ["", "Alta", "Media", "Bassa"]
         current_priority = row.get("priority", "") if row.get("priority", "") in priority_options else ""
         priority = st.selectbox(
-            "Priorit\u00e0",
+            "Priorita",
             options=priority_options,
             index=priority_options.index(current_priority),
             format_func=lambda x: "\u2014" if x == "" else x,
             key=f"edit_priority_{dialog_nonce}",
         )
         incompatibility = st.text_input(
-            "Incompatibilit\u00e0",
+            "Incompatibilita",
             value=str(row.get("incompatibility", "")),
             key=f"edit_incompatibility_{dialog_nonce}",
         )
-        base_destination_options = get_selected_destination_tanks()
-        if st.session_state.get("config_mode") == "simulation":
+        is_simulation_dialog = st.session_state.get("config_mode") == "simulation"
+        active_destinations = set(get_selected_destination_tanks())
+        transfer_by_tk = {}
+        destination_tank = ""
+        transfer_volume = 0
+
+        if is_simulation_dialog:
+            base_destination_options = get_selected_destination_tanks()
             destination_options = base_destination_options if base_destination_options else [""]
+            current_destination = (
+                row.get("destination_tank", "")
+                if row.get("destination_tank", "") in destination_options
+                else (destination_options[0] if destination_options else "")
+            )
+            destination_tank = st.selectbox(
+                "Serbatoio di destinazione",
+                options=destination_options,
+                index=destination_options.index(current_destination),
+                format_func=lambda x: "\u2014" if x == "" else x,
+                key=f"edit_destination_{dialog_nonce}",
+            )
+            transfer_volume = st.number_input(
+                "Volume da trasferire",
+                value=safe_int_input(row.get("transfer_volume")),
+                step=1,
+                key=f"edit_transfer_volume_{dialog_nonce}",
+            )
         else:
-            destination_options = [""] + base_destination_options
-        current_destination = (
-            row.get("destination_tank", "")
-            if row.get("destination_tank", "") in destination_options
-            else (destination_options[0] if destination_options else "")
-        )
-        destination_tank = st.selectbox(
-            "Serbatoio di destinazione",
-            options=destination_options,
-            index=destination_options.index(current_destination),
-            format_func=lambda x: "\u2014" if x == "" else x,
-            key=f"edit_destination_{dialog_nonce}",
-        )
-        transfer_volume = st.number_input(
-            "Volume da trasferire",
-            value=safe_int_input(row.get("transfer_volume")),
-            step=1,
-            key=f"edit_transfer_volume_{dialog_nonce}",
-        )
+            for dest_tank, field in TOP_TRANSFER_FIELDS.items():
+                default_volume = safe_int_input(row.get(field), 0)
+                if default_volume == 0 and str(row.get("destination_tank", "")).strip() == dest_tank:
+                    default_volume = safe_int_input(row.get("transfer_volume"), 0)
+                transfer_by_tk[field] = st.number_input(
+                    f"Volume da trasferire in {dest_tank}",
+                    value=default_volume,
+                    min_value=0,
+                    step=1,
+                    disabled=dest_tank not in active_destinations,
+                    key=f"edit_{field}_{dialog_nonce}",
+                )
         vol_min = st.number_input(
             "Vol. min",
             value=safe_int_input(row.get("vol_min")),
             step=1,
+            disabled=empty_tank,
             key=f"edit_vol_min_{dialog_nonce}",
         )
         vol_max = st.number_input(
             "Vol. max",
             value=safe_int_input(row.get("vol_max")),
             step=1,
+            disabled=empty_tank,
             key=f"edit_vol_max_{dialog_nonce}",
         )
         notes = st.text_area(
@@ -649,7 +902,7 @@ def edit_source_tank_dialog(row_index: int, dialog_nonce: int):
             st.rerun()
     with save_col:
         if st.button("Salva", width="stretch", type="primary", key=f"edit_save_{dialog_nonce}"):
-            source_rows[row_index]["tank"] = str(tank).strip()
+            source_rows[row_index]["tank"] = str(source_tank_name).strip()
             source_rows[row_index]["qty_available"] = qty_available
             source_rows[row_index]["cod"] = cod
             source_rows[row_index]["solvents"] = solvents
@@ -659,10 +912,18 @@ def edit_source_tank_dialog(row_index: int, dialog_nonce: int):
             source_rows[row_index]["empty_tank"] = empty_tank
             source_rows[row_index]["priority"] = priority
             source_rows[row_index]["incompatibility"] = incompatibility
-            source_rows[row_index]["destination_tank"] = destination_tank
-            source_rows[row_index]["transfer_volume"] = transfer_volume
-            source_rows[row_index]["vol_min"] = vol_min
-            source_rows[row_index]["vol_max"] = vol_max
+            if is_simulation_dialog:
+                source_rows[row_index]["destination_tank"] = destination_tank
+                source_rows[row_index]["transfer_volume"] = transfer_volume
+            else:
+                for dest_tank, field in TOP_TRANSFER_FIELDS.items():
+                    source_rows[row_index][field] = transfer_by_tk[field] if dest_tank in active_destinations else 0
+                source_rows[row_index]["destination_tank"] = ""
+                source_rows[row_index]["transfer_volume"] = sum(
+                    safe_int_input(source_rows[row_index].get(field), 0) for field in TOP_TRANSFER_FIELDS.values()
+                )
+            source_rows[row_index]["vol_min"] = None if empty_tank else vol_min
+            source_rows[row_index]["vol_max"] = None if empty_tank else vol_max
             source_rows[row_index]["notes"] = notes
             enforce_destination_tank_rules()
             st.session_state.show_edit_dialog = False
@@ -1034,6 +1295,7 @@ header[data-testid="stHeader"] {
     padding: 5px 14px;
     border-radius: 8px;
     box-shadow: 0 1px 0 rgba(15, 23, 42, 0.03);
+    white-space: nowrap;
 }
 
 .st-key-mode_actions [data-testid="stButton"] > button:hover:not(:disabled) {
@@ -1553,7 +1815,7 @@ if st.session_state.page_mode == "output":
         _sol_126_b_display = "-"
 
     st.markdown(
-        '<div class="top-titlebar">Creazione e ottimizzazione miscele TOP — Risultato e confronto miscele</div>',
+        '<div class="top-titlebar">Creazione e ottimizzazione miscele TOP - Risultato e confronto miscele</div>',
         unsafe_allow_html=True,
     )
 
@@ -1593,9 +1855,9 @@ if st.session_state.page_mode == "output":
     with kpi3:
         st.markdown(f'<div class="output-kpi"><div class="output-kpi-title">Componenti</div><div class="output-kpi-value">{len(recipe_tk125) + len(recipe_tk126)}</div></div>', unsafe_allow_html=True)
     with kpi4:
-        st.markdown('<div class="output-kpi"><div class="output-kpi-title">TK-125 COD target</div><div class="output-kpi-value">44000–48000</div></div>', unsafe_allow_html=True)
+        st.markdown('<div class="output-kpi"><div class="output-kpi-title">TK-125 COD target</div><div class="output-kpi-value">44000 - 48000</div></div>', unsafe_allow_html=True)
     with kpi5:
-        st.markdown('<div class="output-kpi"><div class="output-kpi-title">TK-126 COD target</div><div class="output-kpi-value">43000–47000</div></div>', unsafe_allow_html=True)
+        st.markdown('<div class="output-kpi"><div class="output-kpi-title">TK-126 COD target</div><div class="output-kpi-value">43000 - 47000</div></div>', unsafe_allow_html=True)
     with kpi6:
         st.markdown('<div class="output-kpi"><div class="output-kpi-title">Verifica vincoli</div><div class="output-kpi-value" style="color:#2e7d32">OK</div></div>', unsafe_allow_html=True)
 
@@ -1615,7 +1877,7 @@ if st.session_state.page_mode == "output":
                 with tank_125:
                     st.markdown("""<div class="tank-target-box">
                         <div class="tank-target-row">
-                            <span class="tgt-chip">COD target <b>44000 – 48000</b></span>
+                            <span class="tgt-chip">COD target <b>44000 - 48000</b></span>
                             <span class="tgt-chip">Solventi max <b>800</b></span>
                             <span class="tgt-chip">Vol min <b>40</b></span>
                             <span class="tgt-chip">Vol max <b>60</b></span>
@@ -1681,7 +1943,7 @@ if st.session_state.page_mode == "output":
                         _vc, _rc = st.columns([3, 1], gap="small")
                         with _vc:
                             _new_vol_125 = st.number_input(
-                                f"Volume – {_sc}", min_value=0, step=1,
+                                f"Volume - {_sc}", min_value=0, step=1,
                                 value=int(recipe_tk125.iloc[_si]["Volume"]),
                                 key=f"vol_edit_tk125_{_si}",
                             )
@@ -1699,7 +1961,7 @@ if st.session_state.page_mode == "output":
                 with tank_126:
                     st.markdown("""<div class="tank-target-box">
                         <div class="tank-target-row">
-                            <span class="tgt-chip">COD target <b>43000 – 47000</b></span>
+                            <span class="tgt-chip">COD target <b>43000 - 47000</b></span>
                             <span class="tgt-chip">Solventi max <b>750</b></span>
                             <span class="tgt-chip">Vol min <b>20</b></span>
                             <span class="tgt-chip">Vol max <b>40</b></span>
@@ -1765,7 +2027,7 @@ if st.session_state.page_mode == "output":
                         _vc, _rc = st.columns([3, 1], gap="small")
                         with _vc:
                             _new_vol_126 = st.number_input(
-                                f"Volume – {_sc}", min_value=0, step=1,
+                                f"Volume - {_sc}", min_value=0, step=1,
                                 value=int(recipe_tk126.iloc[_si]["Volume"]),
                                 key=f"vol_edit_tk126_{_si}",
                             )
@@ -1818,7 +2080,7 @@ if st.session_state.page_mode == "output":
                     with tank_125_b:
                         st.markdown("""<div class="tank-target-box">
                             <div class="tank-target-row">
-                                <span class="tgt-chip">COD target <b>44000 – 48000</b></span>
+                                <span class="tgt-chip">COD target <b>44000 - 48000</b></span>
                                 <span class="tgt-chip">Solventi max <b>800</b></span>
                                 <span class="tgt-chip">Vol min <b>40</b></span>
                                 <span class="tgt-chip">Vol max <b>60</b></span>
@@ -1848,7 +2110,7 @@ if st.session_state.page_mode == "output":
                     with tank_126_b:
                         st.markdown("""<div class="tank-target-box">
                             <div class="tank-target-row">
-                                <span class="tgt-chip">COD target <b>43000 – 47000</b></span>
+                                <span class="tgt-chip">COD target <b>43000 - 47000</b></span>
                                 <span class="tgt-chip">Solventi max <b>750</b></span>
                                 <span class="tgt-chip">Vol min <b>20</b></span>
                                 <span class="tgt-chip">Vol max <b>40</b></span>
@@ -1931,31 +2193,31 @@ if st.session_state.page_mode == "output":
                 </div>""", unsafe_allow_html=True)
 
         with st.container(key="out_right_criticita", width="stretch"):
-            st.markdown('<div class="left-subpanel-title">Criticità di miscela</div>', unsafe_allow_html=True)
+            st.markdown('<div class="left-subpanel-title">Criticita di miscela</div>', unsafe_allow_html=True)
             _crit_items = []
             if not _cod_125_ok:
                 _dir_125 = "superiore" if _cod_125_top > _COD_125_MAX else "inferiore"
                 _crit_items.append(f"""<div class="crit-item crit-error">
-                    <div class="crit-title">TK-125 – COD miscela fuori range</div>
-                    <div class="crit-body">COD {_cod_125_top} oltre il limite {_dir_125} ({_COD_125_MIN}–{_COD_125_MAX})</div>
+                    <div class="crit-title">TK-125 - COD miscela fuori range</div>
+                    <div class="crit-body">COD {_cod_125_top} oltre il limite {_dir_125} ({_COD_125_MIN}-{_COD_125_MAX})</div>
                 </div>""")
             if not _cod_126_ok:
                 _dir_126 = "superiore" if _cod_126_top > _COD_126_MAX else "inferiore"
                 _crit_items.append(f"""<div class="crit-item crit-error" style="margin-top:6px">
-                    <div class="crit-title">TK-126 – COD miscela fuori range</div>
-                    <div class="crit-body">COD {_cod_126_top} oltre il limite {_dir_126} ({_COD_126_MIN}–{_COD_126_MAX})</div>
+                    <div class="crit-title">TK-126 - COD miscela fuori range</div>
+                    <div class="crit-body">COD {_cod_126_top} oltre il limite {_dir_126} ({_COD_126_MIN}-{_COD_126_MAX})</div>
                 </div>""")
             _crit_items.append(f"""<div class="crit-item crit-warn" style="margin-top:6px">
-                    <div class="crit-title">TK-126 – COD miscela</div>
+                    <div class="crit-title">TK-126 - COD miscela</div>
                     <div class="crit-body">Vicino al limite superiore del range target</div>
                 </div>
                 <div class="crit-item crit-warn" style="margin-top:6px">
-                    <div class="crit-title">TK-126 – Solventi miscela</div>
+                    <div class="crit-title">TK-126 - Solventi miscela</div>
                     <div class="crit-body">Valore sotto il limite ma da monitorare</div>
                 </div>
                 <div class="crit-item crit-info" style="margin-top:6px">
                     <div class="crit-title">TK-127</div>
-                    <div class="crit-body">Non coinvolto perché il serbatoio non è selezionato</div>
+                    <div class="crit-body">Non coinvolto perche il serbatoio non e selezionato</div>
                 </div>""")
             st.markdown("\n".join(_crit_items), unsafe_allow_html=True)
 
@@ -2076,24 +2338,25 @@ with left_col:
             unsafe_allow_html=True,
         )
 
-        destination_view_selector = st.container(key="destination_view_selector", width="stretch")
-        with destination_view_selector:
-            st.markdown(
-                '<div class="left-panel-caption" style="margin:2px 0 4px">Serbatoi da visualizzare</div>',
-                unsafe_allow_html=True,
-            )
-            st.radio(
-                "Serbatoi da visualizzare",
-                options=["Serbatoi TOP", "Tutti i serbatoi"],
-                horizontal=True,
-                key="destination_view_mode",
-                on_change=sync_simulation_destination_mode,
-                label_visibility="collapsed",
-            )
-            st.markdown(
-                '<div class="left-panel-caption" style="margin:2px 0 8px">Per ciascun serbatoio si definiscono i limiti di capacità della miscela</div>',
-                unsafe_allow_html=True,
-            )
+        if is_simulation_mode:
+            destination_view_selector = st.container(key="destination_view_selector", width="stretch")
+            with destination_view_selector:
+                st.markdown(
+                    '<div class="left-panel-caption" style="margin:2px 0 4px">Serbatoi da visualizzare</div>',
+                    unsafe_allow_html=True,
+                )
+                st.radio(
+                    "Serbatoi da visualizzare",
+                    options=["Serbatoi TOP", "Tutti i serbatoi"],
+                    horizontal=True,
+                    key="destination_view_mode",
+                    on_change=sync_simulation_destination_mode,
+                    label_visibility="collapsed",
+                )
+                st.markdown(
+                    '<div class="left-panel-caption" style="margin:2px 0 8px">Per ciascun serbatoio si definiscono i limiti di capacità della miscela</div>',
+                    unsafe_allow_html=True,
+                )
 
         df_dest = pd.DataFrame(st.session_state.destination_tanks)
 
@@ -2115,7 +2378,7 @@ with left_col:
             on_change=sync_destination_tanks_from_editor,
         )
 
-        if st.session_state.destination_view_mode == "Tutti i serbatoi":
+        if is_simulation_mode and st.session_state.destination_view_mode == "Tutti i serbatoi":
             base_tanks = {
                 str(row.get("tank", "")).strip()
                 for row in st.session_state.destination_tanks
@@ -2245,9 +2508,19 @@ with right_main_box:
 
     active_source_rows = get_active_source_tanks()
     df_source = pd.DataFrame(active_source_rows)
+    selected_top_tanks = [
+        str(row.get("tank", "")).strip()
+        for row in st.session_state.destination_tanks
+        if row.get("selected") and str(row.get("tank", "")).strip() in TOP_TRANSFER_FIELDS
+    ]
+    selected_transfer_pairs = [(tank, TOP_TRANSFER_FIELDS[tank]) for tank in selected_top_tanks]
 
-    df_grid = df_source[
-        [
+    for field in TOP_TRANSFER_FIELDS.values():
+        if field not in df_source.columns:
+            df_source[field] = 0
+
+    if is_simulation_mode:
+        grid_columns = [
             "tank",
             "qty_available",
             "cod",
@@ -2262,7 +2535,24 @@ with right_main_box:
             "vol_max",
             "notes",
         ]
-    ].copy()
+    else:
+        grid_columns = [
+            "tank",
+            "qty_available",
+            "cod",
+            "solvents",
+            "boro",
+            *[field for _, field in selected_transfer_pairs],
+            "empty_tank",
+            "priority",
+            "destination_tank",
+            "vol_min",
+            "vol_max",
+            "incompatibility",
+            "notes",
+        ]
+
+    df_grid = df_source[grid_columns].copy()
 
     df_grid = df_grid.rename(
         columns={
@@ -2276,6 +2566,9 @@ with right_main_box:
             "incompatibility": "Incompatibilit\u00e0",
             "destination_tank": "Serbatoio di destinazione",
             "transfer_volume": "Volume da trasferire",
+            "transfer_tk125": "Volume da trasferire in TK-125",
+            "transfer_tk126": "Volume da trasferire in TK-126",
+            "transfer_tk127": "Volume da trasferire in TK-127",
             "vol_min": "Vol. min",
             "vol_max": "Vol. max",
             "notes": "Note",
@@ -2286,9 +2579,19 @@ with right_main_box:
     df_grid["COD"] = df_grid["COD"].apply(fmt_int_or_dash)
     df_grid["Solventi"] = df_grid["Solventi"].apply(fmt_int_or_dash)
     df_grid["Boro"] = df_grid["Boro"].apply(lambda x: fmt_float_or_dash(x, decimals=1))
-    df_grid["Volume da trasferire"] = df_grid["Volume da trasferire"].apply(fmt_int_or_dash)
+    if is_simulation_mode:
+        df_grid["Volume da trasferire"] = df_grid["Volume da trasferire"].apply(fmt_int_or_dash)
+    else:
+        transfer_display_cols = [f"Volume da trasferire in {tank}" for tank, _ in selected_transfer_pairs]
+        for col_name in transfer_display_cols:
+            if col_name in df_grid.columns:
+                df_grid[col_name] = df_grid[col_name].apply(
+                    lambda v: "" if safe_int_input(v, 0) == 0 else fmt_int_or_dash(v)
+                )
+    empty_tank_mask = df_grid["Svuota serbatoio"].fillna(False).astype(bool)
     df_grid["Vol. min"] = df_grid["Vol. min"].apply(fmt_int_or_dash)
     df_grid["Vol. max"] = df_grid["Vol. max"].apply(fmt_int_or_dash)
+    df_grid.loc[empty_tank_mask, ["Vol. min", "Vol. max"]] = ""
     df_grid["Svuota serbatoio"] = df_grid["Svuota serbatoio"].map(lambda x: "\u2713" if x else "")
     df_grid["Incompatibilit\u00e0"] = df_grid["Incompatibilit\u00e0"].fillna("").replace("", "\u2014")
     df_grid["Note"] = df_grid["Note"].fillna("").replace("", "\u2014")
@@ -2322,28 +2625,59 @@ with right_main_box:
 
         mode_actions = st.container(key="mode_actions", width="stretch")
         with mode_actions:
-            act_left, act_spacer, act_right = st.columns([2.4, 1.2, 1.8], gap="small")
+            if is_simulation_mode:
+                act_left, act_spacer, act_right = st.columns([3.2, 0.4, 1.8], gap="small")
+            else:
+                act_left, act_spacer, act_right = st.columns([2.4, 1.2, 1.8], gap="small")
             with act_left:
-                btn_refresh_col, btn_edit_col, btn_remove_col = st.columns([2.0, 1.1, 1.1], gap="small")
+                if is_simulation_mode:
+                    btn_refresh_col, btn_add_col, btn_edit_col, btn_remove_col = st.columns([2.2, 1.8, 1.0, 1.0], gap="small")
+                else:
+                    btn_refresh_col, btn_edit_col, btn_remove_col = st.columns([2.0, 1.1, 1.1], gap="small")
                 with btn_refresh_col:
+                    refresh_button_width = "stretch" if is_simulation_mode else "content"
                     if st.button(
                         "Aggiorna con dati Skysym",
-                        width="content",
+                        width=refresh_button_width,
                         key="btn_refresh_skysym",
                     ):
                         if is_simulation_mode:
-                            st.session_state.simulation_source_tanks = build_simulation_source_tanks()
-                            sync_simulation_destination_mode()
+                            if is_grid_empty_for_refresh(st.session_state.simulation_source_tanks):
+                                st.session_state.simulation_source_tanks = build_skysym_partial_source_tanks()
+                                sync_simulation_destination_mode()
+                            else:
+                                st.session_state.simulation_source_tanks = apply_skysym_top_fields_on_existing_rows(
+                                    st.session_state.simulation_source_tanks
+                                )
                         else:
-                            st.session_state.source_tanks = deepcopy(source_tanks_default)
-                            enforce_destination_tank_rules()
+                            if is_grid_empty_for_refresh(st.session_state.source_tanks):
+                                st.session_state.source_tanks = build_skysym_partial_source_tanks()
+                                enforce_destination_tank_rules()
+                            else:
+                                st.session_state.source_tanks = apply_skysym_top_fields_on_existing_rows(
+                                    st.session_state.source_tanks
+                                )
                         st.session_state.selected_row_index = None
                         st.session_state.show_edit_dialog = False
                         st.rerun()
+                if is_simulation_mode:
+                    with btn_add_col:
+                        if st.button(
+                            "+ Nuovo movimento",
+                            width="stretch",
+                            key="btn_add_row_simulation",
+                        ):
+                            st.session_state.simulation_source_tanks.append(
+                                build_new_simulation_row(st.session_state.simulation_source_tanks)
+                            )
+                            enforce_destination_tank_rules()
+                            st.session_state.selected_row_index = None
+                            st.session_state.show_edit_dialog = False
+                            st.rerun()
                 with btn_edit_col:
                     if st.button(
                         "Modifica",
-                        width="content",
+                        width="stretch",
                         disabled=selected_idx_for_actions is None,
                         key="btn_edit_row_top",
                     ):
@@ -2353,7 +2687,7 @@ with right_main_box:
                 with btn_remove_col:
                     if st.button(
                         "Rimuovi",
-                        width="content",
+                        width="stretch",
                         disabled=selected_idx_for_actions is None,
                         key="btn_remove_row_top",
                     ):
@@ -2533,3 +2867,5 @@ with right_main_box:
             """,
             unsafe_allow_html=True,
         )
+
+
