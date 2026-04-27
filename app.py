@@ -118,6 +118,37 @@ def build_empty_source_tanks():
     return empty_rows
 
 
+def build_simulation_source_tanks():
+    sim_rows = deepcopy(source_tanks_default)
+    demo_transfer_map = {
+        "S-01": 18,
+        "S-02": 9,
+        "S-03": 12,
+        "S-04": 10,
+        "S-05": 8,
+        "S-06": 5,
+        "S-07": 7,
+        "S-08": 6,
+        "S-09": 4,
+        "TK-125 residuo": 5,
+        "TK-126 residuo": 0,
+    }
+
+    for row in sim_rows:
+        tank_name = str(row.get("tank", "")).strip()
+        if tank_name in demo_transfer_map:
+            row["transfer_volume"] = demo_transfer_map[tank_name]
+        row["destination_tank"] = ""
+
+    return sim_rows
+
+
+def get_active_source_tanks():
+    if st.session_state.get("config_mode") == "simulation":
+        return st.session_state.simulation_source_tanks
+    return st.session_state.source_tanks
+
+
 def is_missing(value):
     return value is None or pd.isna(value)
 
@@ -173,6 +204,8 @@ def initialize_state():
         st.session_state.destination_tanks = deepcopy(destination_tanks_default)
     if "source_tanks" not in st.session_state:
         st.session_state.source_tanks = deepcopy(source_tanks_default)
+    if "simulation_source_tanks" not in st.session_state:
+        st.session_state.simulation_source_tanks = build_simulation_source_tanks()
     if "selected_row_index" not in st.session_state:
         st.session_state.selected_row_index = None
     if "show_edit_dialog" not in st.session_state:
@@ -185,6 +218,10 @@ def initialize_state():
         st.session_state.cod_reduction_pct = 70
     if "page_mode" not in st.session_state:
         st.session_state.page_mode = "config"
+    if "config_mode" not in st.session_state:
+        st.session_state.config_mode = "optimization"
+    if "destination_view_mode" not in st.session_state:
+        st.session_state.destination_view_mode = "Serbatoi TOP"
     if "out_recipe_tk125" not in st.session_state:
         st.session_state.out_recipe_tk125 = None
     if "out_recipe_tk126" not in st.session_state:
@@ -216,12 +253,42 @@ def sync_destination_tanks_from_editor():
 
 
 def get_selected_destination_tanks():
+    is_simulation_mode = st.session_state.get("config_mode") == "simulation"
+    if is_simulation_mode:
+        destination_mode = st.session_state.get("destination_view_mode", "Serbatoi TOP")
+        if destination_mode == "Serbatoi TOP":
+            return ["TK-125", "TK-126"]
+
+        destination_tanks_all = []
+        simulation_extra_destinations = ["S-10", "S-11", "S-12"]
+        for row in st.session_state.destination_tanks:
+            tank_name = str(row.get("tank", "")).strip()
+            if tank_name:
+                destination_tanks_all.append(tank_name)
+
+        destination_tanks_all.extend(simulation_extra_destinations)
+
+        for row in get_active_source_tanks():
+            tank_name = str(row.get("tank", "")).strip()
+            if not tank_name:
+                continue
+            if "residuo" in tank_name.lower():
+                continue
+            if tank_name.upper().startswith("TK-"):
+                destination_tanks_all.append(tank_name)
+
+        return list(dict.fromkeys(destination_tanks_all))
+
     return [r["tank"] for r in st.session_state.destination_tanks if r.get("selected")]
 
 
 def enforce_destination_tank_rules():
-    selected_tanks = set(get_selected_destination_tanks())
-    for row in st.session_state.source_tanks:
+    allowed_tanks = get_selected_destination_tanks()
+    selected_tanks = set(allowed_tanks)
+    is_simulation_mode = st.session_state.get("config_mode") == "simulation"
+    source_rows = get_active_source_tanks()
+
+    for row_idx, row in enumerate(source_rows):
         raw_destination = row.get("destination_tank", "")
         destination = "" if is_missing(raw_destination) else str(raw_destination).strip()
         if destination and destination not in selected_tanks:
@@ -232,8 +299,65 @@ def enforce_destination_tank_rules():
         if is_residue:
             row["empty_tank"] = False
             row["priority"] = ""
-            row["destination_tank"] = ""
+            if not is_simulation_mode:
+                row["destination_tank"] = ""
+                continue
+
+        if is_simulation_mode and allowed_tanks:
+            transfer_volume = safe_int_input(row.get("transfer_volume"), 0)
+            if transfer_volume > 0 and not destination:
+                row["destination_tank"] = allowed_tanks[row_idx % len(allowed_tanks)]
+
+
+def apply_simulation_demo_destinations():
+    if st.session_state.get("config_mode") != "simulation":
+        return
+
+    allowed_tanks = get_selected_destination_tanks()
+    if not allowed_tanks:
+        return
+
+    allowed_set = set(allowed_tanks)
+    destination_mode = st.session_state.get("destination_view_mode", "Serbatoi TOP")
+    top_mode_map = {
+        "S-01": "TK-125",
+        "S-03": "TK-126",
+        "S-04": "TK-125",
+        "S-08": "TK-126",
+        "TK-125 residuo": "TK-125",
+    }
+    all_mode_map = {
+        "S-01": "TK-125",
+        "S-02": "S-10",
+        "S-03": "S-11",
+        "S-04": "TK-125",
+        "S-05": "S-12",
+        "S-06": "S-11",
+        "S-08": "S-10",
+        "S-09": "S-12",
+        "TK-125 residuo": "TK-126",
+    }
+    preferred_map = top_mode_map if destination_mode == "Serbatoi TOP" else all_mode_map
+
+    for row_idx, row in enumerate(get_active_source_tanks()):
+        transfer_volume = safe_int_input(row.get("transfer_volume"), 0)
+        if transfer_volume <= 0:
             continue
+
+        tank_name = str(row.get("tank", "")).strip()
+        preferred_destination = preferred_map.get(tank_name, "")
+        if preferred_destination in allowed_set:
+            row["destination_tank"] = preferred_destination
+            continue
+
+        current_destination = str(row.get("destination_tank", "")).strip()
+        if not current_destination or current_destination not in allowed_set:
+            row["destination_tank"] = allowed_tanks[row_idx % len(allowed_tanks)]
+
+
+def sync_simulation_destination_mode():
+    enforce_destination_tank_rules()
+    apply_simulation_demo_destinations()
 
 
 def build_coherence_issues():
@@ -254,7 +378,7 @@ def build_coherence_issues():
             continue
 
     destination_transfer_sum = {tank: 0.0 for tank in destination_vmax}
-    for row in st.session_state.source_tanks:
+    for row in get_active_source_tanks():
         dest = str(row.get("destination_tank", "")).strip()
         if not dest or dest not in destination_transfer_sum:
             continue
@@ -397,14 +521,15 @@ enforce_destination_tank_rules()
 
 @st.dialog("Modifica serbatoio", width="large")
 def edit_source_tank_dialog(row_index: int, dialog_nonce: int):
-    if row_index is None or row_index < 0 or row_index >= len(st.session_state.source_tanks):
+    source_rows = get_active_source_tanks()
+    if row_index is None or row_index < 0 or row_index >= len(source_rows):
         st.warning("Nessun record valido selezionato.")
         if st.button("Chiudi", width="content", key=f"edit_close_{dialog_nonce}"):
             st.session_state.show_edit_dialog = False
             st.rerun()
         return
 
-    row = st.session_state.source_tanks[row_index]
+    row = source_rows[row_index]
 
     left_edit_col, right_edit_col = st.columns(2, gap="large")
 
@@ -476,9 +601,15 @@ def edit_source_tank_dialog(row_index: int, dialog_nonce: int):
             value=str(row.get("incompatibility", "")),
             key=f"edit_incompatibility_{dialog_nonce}",
         )
-        destination_options = [""] + get_selected_destination_tanks()
+        base_destination_options = get_selected_destination_tanks()
+        if st.session_state.get("config_mode") == "simulation":
+            destination_options = base_destination_options if base_destination_options else [""]
+        else:
+            destination_options = [""] + base_destination_options
         current_destination = (
-            row.get("destination_tank", "") if row.get("destination_tank", "") in destination_options else ""
+            row.get("destination_tank", "")
+            if row.get("destination_tank", "") in destination_options
+            else (destination_options[0] if destination_options else "")
         )
         destination_tank = st.selectbox(
             "Serbatoio di destinazione",
@@ -518,21 +649,21 @@ def edit_source_tank_dialog(row_index: int, dialog_nonce: int):
             st.rerun()
     with save_col:
         if st.button("Salva", width="stretch", type="primary", key=f"edit_save_{dialog_nonce}"):
-            st.session_state.source_tanks[row_index]["tank"] = str(tank).strip()
-            st.session_state.source_tanks[row_index]["qty_available"] = qty_available
-            st.session_state.source_tanks[row_index]["cod"] = cod
-            st.session_state.source_tanks[row_index]["solvents"] = solvents
-            st.session_state.source_tanks[row_index]["cl"] = cl
-            st.session_state.source_tanks[row_index]["n"] = n_value
-            st.session_state.source_tanks[row_index]["boro"] = boro
-            st.session_state.source_tanks[row_index]["empty_tank"] = empty_tank
-            st.session_state.source_tanks[row_index]["priority"] = priority
-            st.session_state.source_tanks[row_index]["incompatibility"] = incompatibility
-            st.session_state.source_tanks[row_index]["destination_tank"] = destination_tank
-            st.session_state.source_tanks[row_index]["transfer_volume"] = transfer_volume
-            st.session_state.source_tanks[row_index]["vol_min"] = vol_min
-            st.session_state.source_tanks[row_index]["vol_max"] = vol_max
-            st.session_state.source_tanks[row_index]["notes"] = notes
+            source_rows[row_index]["tank"] = str(tank).strip()
+            source_rows[row_index]["qty_available"] = qty_available
+            source_rows[row_index]["cod"] = cod
+            source_rows[row_index]["solvents"] = solvents
+            source_rows[row_index]["cl"] = cl
+            source_rows[row_index]["n"] = n_value
+            source_rows[row_index]["boro"] = boro
+            source_rows[row_index]["empty_tank"] = empty_tank
+            source_rows[row_index]["priority"] = priority
+            source_rows[row_index]["incompatibility"] = incompatibility
+            source_rows[row_index]["destination_tank"] = destination_tank
+            source_rows[row_index]["transfer_volume"] = transfer_volume
+            source_rows[row_index]["vol_min"] = vol_min
+            source_rows[row_index]["vol_max"] = vol_max
+            source_rows[row_index]["notes"] = notes
             enforce_destination_tank_rules()
             st.session_state.show_edit_dialog = False
             st.rerun()
@@ -674,6 +805,15 @@ header[data-testid="stHeader"] {
 .left-panel-caption {
     font-size: 11.5px;
     color: #8b97a4;
+}
+
+.st-key-destination_view_selector [data-testid="stRadio"] > div {
+    gap: 14px;
+}
+
+.st-key-destination_view_selector [data-testid="stRadio"] label {
+    font-size: 12px;
+    color: #546273;
 }
 
 .left-subpanel-title {
@@ -843,6 +983,34 @@ header[data-testid="stHeader"] {
     font-weight: 700;
     border-bottom: 3px solid #2f5bb4;
     margin-bottom: -1px;
+}
+
+.st-key-config_mode_tabs {
+    display: block;
+    border-bottom: 1px solid #d9dee6;
+    margin: 0 0 8px;
+    padding: 0 12px 0;
+}
+
+.st-key-config_mode_tabs [data-testid="stButton"] > button {
+    background: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    border-radius: 0;
+    color: #8b97a4;
+    font-size: 16px;
+    font-weight: 600;
+    min-height: 34px;
+    padding: 0 0 6px;
+    margin-bottom: -1px;
+    box-shadow: none;
+    white-space: nowrap;
+}
+
+.st-key-config_mode_tabs [data-testid="stButton"] > button[kind="primary"] {
+    color: #1f4b8f;
+    font-weight: 700;
+    border-bottom-color: #2f5bb4;
 }
 
 .st-key-mode_actions {
@@ -1799,14 +1967,28 @@ if st.session_state.page_mode == "output":
 
     st.stop()
 
+config_mode = st.session_state.config_mode if st.session_state.config_mode in {"simulation", "optimization"} else "optimization"
+st.session_state.config_mode = config_mode
+is_simulation_mode = config_mode == "simulation"
+config_title = "Movimenti tra serbatoi - Simulazione" if is_simulation_mode else "Gestione Miscele - Configurazione"
+scenario_label = (
+    f"{st.session_state.current_scenario}-sim"
+    if is_simulation_mode
+    else st.session_state.current_scenario
+)
+show_plant_badge = not (
+    is_simulation_mode
+    and st.session_state.get("destination_view_mode") == "Tutti i serbatoi"
+)
+
 st.markdown(
-    '<div class="top-titlebar">Gestione Miscele - Configurazione</div>',
+    f'<div class="top-titlebar">{config_title}</div>',
     unsafe_allow_html=True,
 )
 
 toolbar = st.container(key="top_toolbar", width="stretch")
 with toolbar:
-    left_actions, right_badges = st.columns([3.7, 1.3], gap="small")
+    left_actions, _ = st.columns([3.7, 1.3], gap="small")
 
     with left_actions:
         btn_new_col, btn_dup_col, btn_sim_col, btn_run_col, _ = st.columns(
@@ -1822,6 +2004,7 @@ with toolbar:
                 st.session_state.destination_tanks = deepcopy(destination_tanks_default)
                 st.session_state.pop("destination_tanks_editor", None)
                 st.session_state.source_tanks = build_empty_source_tanks()
+                st.session_state.simulation_source_tanks = build_simulation_source_tanks()
                 st.session_state.selected_row_index = None
                 st.session_state.show_edit_dialog = False
                 st.session_state.show_cod_setting = False
@@ -1835,6 +2018,7 @@ with toolbar:
                 st.session_state.show_add_comp_tk126 = False
                 st.session_state.output_compare_scenario = ""
                 st.session_state.output_has_scenario_a_plus = False
+                st.session_state.config_mode = "optimization"
                 st.session_state.page_mode = "config"
 
         with btn_dup_col:
@@ -1843,23 +2027,31 @@ with toolbar:
                 next_letter = chr(ord("A") + st.session_state.scenario_counter - 1)
                 st.session_state.current_scenario = f"Scenario {next_letter}"
                 st.session_state.show_edit_dialog = False
+                st.session_state.config_mode = "optimization"
                 st.session_state.page_mode = "config"
 
         with btn_sim_col:
-            st.button(
+            if st.button(
                 "Esegui simulazione",
                 width="content",
-                disabled=True,
+                type="primary" if st.session_state.config_mode == "simulation" else "secondary",
+                disabled=st.session_state.config_mode != "simulation",
                 key="btn_run_simulation",
-            )
+            ):
+                st.session_state.config_mode = "simulation"
+                sync_simulation_destination_mode()
+                st.session_state.show_edit_dialog = False
+                st.rerun()
 
         with btn_run_col:
             if st.button(
                 "Esegui ottimizzazione",
                 width="content",
-                type="primary",
+                type="primary" if st.session_state.config_mode == "optimization" else "secondary",
+                disabled=st.session_state.config_mode != "optimization",
                 key="btn_run_optimization",
             ):
+                st.session_state.config_mode = "optimization"
                 if not build_coherence_issues():
                     st.session_state.output_compare_scenario = ""
                     st.session_state.output_has_scenario_a_plus = False
@@ -1868,16 +2060,6 @@ with toolbar:
                     st.session_state.page_mode = "output"
                     st.session_state.show_edit_dialog = False
                     st.rerun()
-
-    with right_badges:
-        _, plant_col, scenario_col = st.columns([2.2, 0.9, 1.4], gap="small")
-        with plant_col:
-            st.markdown(f'<div class="top-chip">{st.session_state.plant}</div>', unsafe_allow_html=True)
-        with scenario_col:
-            st.markdown(
-                f'<div class="top-chip">{st.session_state.current_scenario}</div>',
-                unsafe_allow_html=True,
-            )
 
 left_col, right_col = st.columns([0.82, 2.18], gap="medium")
 
@@ -1893,6 +2075,25 @@ with left_col:
             """,
             unsafe_allow_html=True,
         )
+
+        destination_view_selector = st.container(key="destination_view_selector", width="stretch")
+        with destination_view_selector:
+            st.markdown(
+                '<div class="left-panel-caption" style="margin:2px 0 4px">Serbatoi da visualizzare</div>',
+                unsafe_allow_html=True,
+            )
+            st.radio(
+                "Serbatoi da visualizzare",
+                options=["Serbatoi TOP", "Tutti i serbatoi"],
+                horizontal=True,
+                key="destination_view_mode",
+                on_change=sync_simulation_destination_mode,
+                label_visibility="collapsed",
+            )
+            st.markdown(
+                '<div class="left-panel-caption" style="margin:2px 0 8px">Per ciascun serbatoio si definiscono i limiti di capacità della miscela</div>',
+                unsafe_allow_html=True,
+            )
 
         df_dest = pd.DataFrame(st.session_state.destination_tanks)
 
@@ -1913,6 +2114,26 @@ with left_col:
             key="destination_tanks_editor",
             on_change=sync_destination_tanks_from_editor,
         )
+
+        if st.session_state.destination_view_mode == "Tutti i serbatoi":
+            base_tanks = {
+                str(row.get("tank", "")).strip()
+                for row in st.session_state.destination_tanks
+                if str(row.get("tank", "")).strip()
+            }
+            all_tanks_for_view = get_selected_destination_tanks()
+            extra_tanks = [tank for tank in all_tanks_for_view if tank not in base_tanks]
+            if extra_tanks:
+                with st.expander(f"Visualizza altri serbatoi ({len(extra_tanks)})", expanded=False):
+                    extra_df = pd.DataFrame(
+                        [{"Serbatoio": tank, "Tipo": "Ricevimento"} for tank in extra_tanks]
+                    )
+                    st.dataframe(
+                        extra_df,
+                        hide_index=True,
+                        width="stretch",
+                        height=min(220, 60 + len(extra_df) * 35),
+                    )
 
         active_tanks = [r["tank"] for r in st.session_state.destination_tanks if r["selected"]]
 
@@ -1975,15 +2196,45 @@ with right_col:
     right_main_box = st.container(key="right_main_box", width="stretch")
 
 with right_main_box:
-    st.markdown(
-        """
-        <div class="mode-tabs">
-            <span class="mode-tab">Simulazione</span>
-            <span class="mode-tab mode-tab-active">Ottimizzazione</span>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    config_mode_tabs = st.container(key="config_mode_tabs", width="stretch")
+    with config_mode_tabs:
+        tabs_left, tabs_right = st.columns([4.4, 1.2], gap="small")
+
+        with tabs_left:
+            mode_sim_col, mode_opt_col, _ = st.columns([1.25, 1.35, 8.4], gap="small")
+            with mode_sim_col:
+                if st.button(
+                    "Simulazione",
+                    width="content",
+                    type="primary" if is_simulation_mode else "secondary",
+                    key="btn_cfg_tab_simulation",
+                ):
+                    st.session_state.config_mode = "simulation"
+                    sync_simulation_destination_mode()
+                    st.rerun()
+            with mode_opt_col:
+                if st.button(
+                    "Ottimizzazione",
+                    width="content",
+                    type="primary" if not is_simulation_mode else "secondary",
+                    key="btn_cfg_tab_optimization",
+                ):
+                    st.session_state.config_mode = "optimization"
+                    st.rerun()
+
+        with tabs_right:
+            _, plant_chip_col, scenario_chip_col = st.columns([1.0, 1.0, 1.6], gap="small")
+            with plant_chip_col:
+                if show_plant_badge:
+                    st.markdown(
+                        f'<div class="top-chip" style="margin-top:8px; margin-right:-2px; float:right">{st.session_state.plant}</div>',
+                        unsafe_allow_html=True,
+                    )
+            with scenario_chip_col:
+                st.markdown(
+                    f'<div class="top-chip" style="margin-top:8px; margin-right:-2px; float:right">{scenario_label}</div>',
+                    unsafe_allow_html=True,
+                )
 
     table_state = st.session_state.get("source_tanks_table", {})
     selected_idx_for_actions = st.session_state.selected_row_index
@@ -1992,60 +2243,8 @@ with right_main_box:
         if selected_rows_state:
             selected_idx_for_actions = selected_rows_state[0]
 
-    st.markdown('<div class="right-main-title">Serbatoi disponibili per alimentazione TOP</div>', unsafe_allow_html=True)
-
-    mode_actions = st.container(key="mode_actions", width="stretch")
-    with mode_actions:
-        act_left, act_spacer, act_right = st.columns([2.4, 1.2, 1.8], gap="small")
-        with act_left:
-            btn_refresh_col, btn_edit_col, btn_remove_col = st.columns([2.0, 1.1, 1.1], gap="small")
-            with btn_refresh_col:
-                if st.button(
-                    "Aggiorna con dati Skysym",
-                    width="content",
-                    key="btn_refresh_skysym",
-                ):
-                    st.session_state.source_tanks = deepcopy(source_tanks_default)
-                    enforce_destination_tank_rules()
-                    st.session_state.selected_row_index = None
-                    st.session_state.show_edit_dialog = False
-                    st.rerun()
-            with btn_edit_col:
-                if st.button(
-                    "Modifica",
-                    width="content",
-                    disabled=selected_idx_for_actions is None,
-                    key="btn_edit_row_top",
-                ):
-                    st.session_state.selected_row_index = selected_idx_for_actions
-                    st.session_state.show_edit_dialog = True
-                    st.session_state.edit_dialog_nonce += 1
-            with btn_remove_col:
-                if st.button(
-                    "Rimuovi",
-                    width="content",
-                    disabled=selected_idx_for_actions is None,
-                    key="btn_remove_row_top",
-                ):
-                    if selected_idx_for_actions is not None and 0 <= selected_idx_for_actions < len(st.session_state.source_tanks):
-                        st.session_state.source_tanks.pop(selected_idx_for_actions)
-                        st.session_state.selected_row_index = None
-                        st.session_state.show_edit_dialog = False
-                        st.rerun()
-        with act_right:
-            search_col, filter_col = st.columns([3.2, 1.1], gap="small")
-            with search_col:
-                st.text_input(
-                    "Ricerca",
-                    value="",
-                    placeholder="Cerca rifiuto, cliente, produttore...",
-                    label_visibility="collapsed",
-                    key="opt_search_text",
-                )
-            with filter_col:
-                st.button("Filtri", width="stretch", key="btn_filters")
-
-    df_source = pd.DataFrame(st.session_state.source_tanks)
+    active_source_rows = get_active_source_tanks()
+    df_source = pd.DataFrame(active_source_rows)
 
     df_grid = df_source[
         [
@@ -2094,6 +2293,16 @@ with right_main_box:
     df_grid["Incompatibilit\u00e0"] = df_grid["Incompatibilit\u00e0"].fillna("").replace("", "\u2014")
     df_grid["Note"] = df_grid["Note"].fillna("").replace("", "\u2014")
 
+    if is_simulation_mode:
+        hidden_sim_columns = [
+            "Priorit\u00e0",
+            "Svuota serbatoio",
+            "Incompatibilit\u00e0",
+            "Vol. min",
+            "Vol. max",
+        ]
+        df_grid = df_grid.drop(columns=[c for c in hidden_sim_columns if c in df_grid.columns])
+
     styled_grid = (
         df_grid.style
         .apply(style_priority_column, axis=0)
@@ -2101,19 +2310,167 @@ with right_main_box:
         .apply(style_incompatibility_column, axis=0)
     )
 
-    selection_event = st.dataframe(
-        styled_grid,
-        width="stretch",
-        hide_index=True,
-        height=360,
-        column_config={
-            "Serbatoio": st.column_config.TextColumn("Serbatoio", width=120),
-            "Note": st.column_config.TextColumn("Note", width="medium"),
-        },
-        on_select="rerun",
-        selection_mode="single-row",
-        key="source_tanks_table",
-    )
+    if is_simulation_mode:
+        grid_tab_moves, grid_tab_status = st.tabs(["Movimenti tra serbatoi", "Simulazione stato serbatoi"])
+    else:
+        grid_tab_moves = st.container()
+        grid_tab_status = None
+
+    with grid_tab_moves:
+        if not is_simulation_mode:
+            st.markdown('<div class="right-main-title">Serbatoi disponibili per alimentazione TOP</div>', unsafe_allow_html=True)
+
+        mode_actions = st.container(key="mode_actions", width="stretch")
+        with mode_actions:
+            act_left, act_spacer, act_right = st.columns([2.4, 1.2, 1.8], gap="small")
+            with act_left:
+                btn_refresh_col, btn_edit_col, btn_remove_col = st.columns([2.0, 1.1, 1.1], gap="small")
+                with btn_refresh_col:
+                    if st.button(
+                        "Aggiorna con dati Skysym",
+                        width="content",
+                        key="btn_refresh_skysym",
+                    ):
+                        if is_simulation_mode:
+                            st.session_state.simulation_source_tanks = build_simulation_source_tanks()
+                            sync_simulation_destination_mode()
+                        else:
+                            st.session_state.source_tanks = deepcopy(source_tanks_default)
+                            enforce_destination_tank_rules()
+                        st.session_state.selected_row_index = None
+                        st.session_state.show_edit_dialog = False
+                        st.rerun()
+                with btn_edit_col:
+                    if st.button(
+                        "Modifica",
+                        width="content",
+                        disabled=selected_idx_for_actions is None,
+                        key="btn_edit_row_top",
+                    ):
+                        st.session_state.selected_row_index = selected_idx_for_actions
+                        st.session_state.show_edit_dialog = True
+                        st.session_state.edit_dialog_nonce += 1
+                with btn_remove_col:
+                    if st.button(
+                        "Rimuovi",
+                        width="content",
+                        disabled=selected_idx_for_actions is None,
+                        key="btn_remove_row_top",
+                    ):
+                        if selected_idx_for_actions is not None and 0 <= selected_idx_for_actions < len(active_source_rows):
+                            active_source_rows.pop(selected_idx_for_actions)
+                            st.session_state.selected_row_index = None
+                            st.session_state.show_edit_dialog = False
+                            st.rerun()
+            with act_right:
+                search_col, filter_col = st.columns([3.2, 1.1], gap="small")
+                with search_col:
+                    st.text_input(
+                        "Ricerca",
+                        value="",
+                        placeholder="Cerca rifiuto, cliente, produttore...",
+                        label_visibility="collapsed",
+                        key="opt_search_text",
+                    )
+                with filter_col:
+                    st.button("Filtri", width="stretch", key="btn_filters")
+
+        selection_event = st.dataframe(
+            styled_grid,
+            width="stretch",
+            hide_index=True,
+            height=360,
+            column_config={
+                "Serbatoio": st.column_config.TextColumn("Serbatoio", width=120),
+                "Note": st.column_config.TextColumn("Note", width="medium"),
+            },
+            on_select="rerun",
+            selection_mode="single-row",
+            key="source_tanks_table",
+        )
+
+    if grid_tab_status is not None:
+        with grid_tab_status:
+            sim_rows = []
+            selected_dest_rows = [r for r in st.session_state.destination_tanks if r.get("selected")]
+            for dest in selected_dest_rows:
+                dest_tank = str(dest.get("tank", "")).strip()
+                if not dest_tank:
+                    continue
+                cod_range_text = str(dest.get("cod_range", "")).replace(" ", "")
+                cod_min = None
+                cod_max = None
+                if "-" in cod_range_text:
+                    parts = cod_range_text.split("-", 1)
+                    try:
+                        cod_min = int(float(parts[0]))
+                        cod_max = int(float(parts[1]))
+                    except (TypeError, ValueError):
+                        cod_min = None
+                        cod_max = None
+
+                matching_sources = []
+                for row in active_source_rows:
+                    row_dest = str(row.get("destination_tank", "")).strip()
+                    if row_dest != dest_tank:
+                        continue
+                    vol = safe_int_input(row.get("transfer_volume"), 0)
+                    if vol <= 0:
+                        continue
+                    matching_sources.append(row)
+
+                volume_total = sum(safe_int_input(r.get("transfer_volume"), 0) for r in matching_sources)
+                cod_sim = 0
+                solv_sim = 0
+                if volume_total > 0:
+                    cod_sim = int(round(
+                        sum(safe_int_input(r.get("cod"), 0) * safe_int_input(r.get("transfer_volume"), 0) for r in matching_sources)
+                        / volume_total
+                    ))
+                    solv_sim = int(round(
+                        sum(safe_int_input(r.get("solvents"), 0) * safe_int_input(r.get("transfer_volume"), 0) for r in matching_sources)
+                        / volume_total
+                    ))
+
+                esito = "Nessun movimento"
+                if volume_total > 0:
+                    if cod_min is not None and cod_max is not None:
+                        if cod_min <= cod_sim <= cod_max:
+                            esito = "Nel range"
+                        elif cod_sim > cod_max:
+                            esito = "Fuori range (alto)"
+                        else:
+                            esito = "Fuori range (basso)"
+                    else:
+                        esito = "Da verificare"
+
+                sim_rows.append(
+                    {
+                        "Serbatoio": dest_tank,
+                        "Vol. simulato (m3)": volume_total,
+                        "COD simulato": cod_sim if volume_total > 0 else "\u2014",
+                        "Solventi simulati": solv_sim if volume_total > 0 else "\u2014",
+                        "Esito COD": esito,
+                    }
+                )
+
+            if sim_rows:
+                sim_df = pd.DataFrame(sim_rows)
+                st.dataframe(
+                    sim_df,
+                    width="stretch",
+                    hide_index=True,
+                    height=240,
+                    column_config={
+                        "Serbatoio": st.column_config.TextColumn("Serbatoio", width="small"),
+                        "Vol. simulato (m3)": st.column_config.NumberColumn("Vol. simulato (m3)", format="%d", width="small"),
+                        "COD simulato": st.column_config.TextColumn("COD simulato", width="small"),
+                        "Solventi simulati": st.column_config.TextColumn("Solventi simulati", width="small"),
+                        "Esito COD": st.column_config.TextColumn("Esito COD", width="medium"),
+                    },
+                )
+            else:
+                st.info("Nessun serbatoio di destinazione selezionato per la simulazione.")
 
     selected_rows = selection_event.selection.rows
     st.session_state.selected_row_index = selected_rows[0] if selected_rows else None
@@ -2160,10 +2517,11 @@ with right_main_box:
         )
 
     with bottom_right:
+        right_panel_title = "Parametri medi miscela simulata" if is_simulation_mode else "Parametri medi disponibili"
         st.markdown(
             f"""
             <div class="mini-panel">
-                <div class="mini-title">Parametri medi disponibili</div>
+                <div class="mini-title">{right_panel_title}</div>
                 <div class="mini-body">
                     <div class="metric-list">
                         <div class="metric">COD medio componenti selezionabili <b>{avg_cod}</b></div>
