@@ -600,6 +600,27 @@ def open_predefined_scenario(preset: str):
     st.session_state.page_mode = "config"
 
 
+def duplicate_current_scenario():
+    st.session_state.scenario_counter += 1
+    next_letter = chr(ord("A") + st.session_state.scenario_counter - 1)
+    st.session_state.current_scenario = f"Scenario {next_letter}"
+    st.session_state.show_edit_dialog = False
+    current_scope = st.session_state.get("scenario_scope", SCENARIO_SCOPE_TOP)
+    if current_scope == SCENARIO_SCOPE_ALL:
+        st.session_state.config_mode = "simulation"
+        st.session_state.destination_view_mode = "Tutti i serbatoi"
+    else:
+        if st.session_state.get("config_mode") not in {"simulation", "optimization"}:
+            st.session_state.config_mode = "optimization"
+        st.session_state.destination_view_mode = "Serbatoi TOP"
+    st.session_state.page_mode = "config"
+
+
+def duplicate_predefined_scenario(preset: str):
+    open_predefined_scenario(preset)
+    duplicate_current_scenario()
+
+
 def get_display_scenario_label():
     return str(st.session_state.get("current_scenario", "Scenario A")).strip() or "Scenario A"
 
@@ -1398,22 +1419,26 @@ header[data-testid="stHeader"] {
 }
 
 .st-key-new_scenario_hover_menu,
-.st-key-open_scenario_hover_menu {
+.st-key-open_scenario_hover_menu,
+.st-key-duplicate_scenario_hover_menu {
     position: relative;
 }
 
 .st-key-new_scenario_hover_menu [data-testid="stVerticalBlock"],
-.st-key-open_scenario_hover_menu [data-testid="stVerticalBlock"] {
+.st-key-open_scenario_hover_menu [data-testid="stVerticalBlock"],
+.st-key-duplicate_scenario_hover_menu [data-testid="stVerticalBlock"] {
     gap: 0 !important;
 }
 
 .st-key-new_scenario_hover_menu [data-testid="stElementContainer"],
-.st-key-open_scenario_hover_menu [data-testid="stElementContainer"] {
+.st-key-open_scenario_hover_menu [data-testid="stElementContainer"],
+.st-key-duplicate_scenario_hover_menu [data-testid="stElementContainer"] {
     margin-bottom: 0 !important;
 }
 
 .st-key-new_scenario_hover_items,
-.st-key-open_scenario_hover_items {
+.st-key-open_scenario_hover_items,
+.st-key-duplicate_scenario_hover_items {
     display: none;
     position: absolute;
     top: 36px;
@@ -1428,12 +1453,14 @@ header[data-testid="stHeader"] {
 }
 
 .st-key-new_scenario_hover_menu:hover .st-key-new_scenario_hover_items,
-.st-key-open_scenario_hover_menu:hover .st-key-open_scenario_hover_items {
+.st-key-open_scenario_hover_menu:hover .st-key-open_scenario_hover_items,
+.st-key-duplicate_scenario_hover_menu:hover .st-key-duplicate_scenario_hover_items {
     display: block;
 }
 
 .st-key-new_scenario_hover_items [data-testid="stButton"] > button,
-.st-key-open_scenario_hover_items [data-testid="stButton"] > button {
+.st-key-open_scenario_hover_items [data-testid="stButton"] > button,
+.st-key-duplicate_scenario_hover_items [data-testid="stButton"] > button {
     border: 0 !important;
     border-radius: 4px !important;
     background: #ffffff !important;
@@ -1446,7 +1473,8 @@ header[data-testid="stHeader"] {
 }
 
 .st-key-new_scenario_hover_items [data-testid="stButton"] > button:hover,
-.st-key-open_scenario_hover_items [data-testid="stButton"] > button:hover {
+.st-key-open_scenario_hover_items [data-testid="stButton"] > button:hover,
+.st-key-duplicate_scenario_hover_items [data-testid="stButton"] > button:hover {
     background: #eef3fa !important;
 }
 
@@ -2934,12 +2962,19 @@ st.markdown(
 toolbar = st.container(key="top_toolbar", width="stretch")
 with toolbar:
     left_actions, _ = st.columns([5.8, 0.2], gap="small")
+    is_home_mode = st.session_state.get("page_mode") == "home"
 
     with left_actions:
-        btn_new_col, btn_open_col, btn_dup_col, btn_sim_col, btn_run_col, _ = st.columns(
-            [1.35, 1.7, 1.55, 1.95, 2.1, 2.35],
-            gap="small",
-        )
+        if is_home_mode:
+            btn_new_col, btn_open_col, btn_dup_col, _ = st.columns(
+                [1.35, 1.7, 1.55, 5.9],
+                gap="small",
+            )
+        else:
+            btn_new_col, btn_open_col, btn_dup_col, btn_sim_col, btn_run_col, _ = st.columns(
+                [1.35, 1.7, 1.55, 1.95, 2.1, 2.35],
+                gap="small",
+            )
 
         with btn_new_col:
             with st.container(key="new_scenario_hover_menu"):
@@ -2972,50 +3007,53 @@ with toolbar:
                 st.rerun()
 
         with btn_dup_col:
-            if st.button("Duplica scenario", width="stretch", key="btn_duplicate_scenario"):
-                st.session_state.scenario_counter += 1
-                next_letter = chr(ord("A") + st.session_state.scenario_counter - 1)
-                st.session_state.current_scenario = f"Scenario {next_letter}"
-                st.session_state.show_edit_dialog = False
-                if scenario_scope == SCENARIO_SCOPE_ALL:
-                    st.session_state.config_mode = "simulation"
-                    st.session_state.destination_view_mode = "Tutti i serbatoi"
-                else:
-                    if st.session_state.get("config_mode") not in {"simulation", "optimization"}:
-                        st.session_state.config_mode = "optimization"
-                    st.session_state.destination_view_mode = "Serbatoi TOP"
-                st.session_state.page_mode = "config"
-
-        with btn_sim_col:
-            if st.button(
-                "Esegui simulazione",
-                width="stretch",
-                type="primary" if st.session_state.config_mode == "simulation" else "secondary",
-                disabled=st.session_state.config_mode != "simulation",
-                key="btn_run_simulation",
-            ):
-                st.session_state.config_mode = "simulation"
-                sync_simulation_destination_mode()
-                st.session_state.show_edit_dialog = False
+            with st.container(key="duplicate_scenario_hover_menu"):
+                st.button("Duplica scenario", width="stretch", key="btn_duplicate_scenario_trigger")
+                with st.container(key="duplicate_scenario_hover_items"):
+                    duplicate_scenario_a = st.button("Scenario A - ottimTOP", width="stretch", key="btn_duplicate_scenario_a")
+                    duplicate_scenario_b = st.button("Scenario B - simulTOP", width="stretch", key="btn_duplicate_scenario_b")
+                    duplicate_scenario_c = st.button("Scenario C - all", width="stretch", key="btn_duplicate_scenario_c")
+            if duplicate_scenario_a:
+                duplicate_predefined_scenario(SCENARIO_PRESET_TOP)
+                st.rerun()
+            if duplicate_scenario_b:
+                duplicate_predefined_scenario(SCENARIO_PRESET_SIM_TOP)
+                st.rerun()
+            if duplicate_scenario_c:
+                duplicate_predefined_scenario(SCENARIO_PRESET_ALL)
                 st.rerun()
 
-        with btn_run_col:
-            if st.button(
-                "Esegui ottimizzazione",
-                width="stretch",
-                type="primary" if st.session_state.config_mode == "optimization" else "secondary",
-                disabled=(st.session_state.config_mode != "optimization") or (scenario_scope == SCENARIO_SCOPE_ALL),
-                key="btn_run_optimization",
-            ):
-                st.session_state.config_mode = "optimization"
-                if not build_coherence_issues():
-                    st.session_state.output_compare_scenario = ""
-                    st.session_state.output_has_scenario_a_plus = False
-                    st.session_state.out_recipe_b_tk125 = None
-                    st.session_state.out_recipe_b_tk126 = None
-                    st.session_state.page_mode = "output"
+        if not is_home_mode:
+            with btn_sim_col:
+                if st.button(
+                    "Esegui simulazione",
+                    width="stretch",
+                    type="primary" if st.session_state.config_mode == "simulation" else "secondary",
+                    disabled=st.session_state.config_mode != "simulation",
+                    key="btn_run_simulation",
+                ):
+                    st.session_state.config_mode = "simulation"
+                    sync_simulation_destination_mode()
                     st.session_state.show_edit_dialog = False
                     st.rerun()
+
+            with btn_run_col:
+                if st.button(
+                    "Esegui ottimizzazione",
+                    width="stretch",
+                    type="primary" if st.session_state.config_mode == "optimization" else "secondary",
+                    disabled=(st.session_state.config_mode != "optimization") or (scenario_scope == SCENARIO_SCOPE_ALL),
+                    key="btn_run_optimization",
+                ):
+                    st.session_state.config_mode = "optimization"
+                    if not build_coherence_issues():
+                        st.session_state.output_compare_scenario = ""
+                        st.session_state.output_has_scenario_a_plus = False
+                        st.session_state.out_recipe_b_tk125 = None
+                        st.session_state.out_recipe_b_tk126 = None
+                        st.session_state.page_mode = "output"
+                        st.session_state.show_edit_dialog = False
+                        st.rerun()
 
 if st.session_state.get("page_mode") == "home":
     st.stop()
