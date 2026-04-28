@@ -1,4 +1,4 @@
-﻿import streamlit as st
+import streamlit as st
 import pandas as pd
 from copy import deepcopy
 
@@ -551,6 +551,15 @@ def create_new_scenario(scope: str):
 
 
 def open_predefined_scenario(preset: str):
+    preset_counter_map = {
+        SCENARIO_PRESET_TOP: 1,
+        SCENARIO_PRESET_SIM_TOP: 2,
+        SCENARIO_PRESET_ALL: 3,
+    }
+    target_counter = preset_counter_map.get(preset, 1)
+    current_counter = safe_int_input(st.session_state.get("scenario_counter"), 1)
+    st.session_state.scenario_counter = max(current_counter, target_counter)
+
     st.session_state.destination_tanks = deepcopy(destination_tanks_default)
     st.session_state.pop("destination_tanks_editor", None)
     st.session_state.source_tanks = deepcopy(source_tanks_default)
@@ -592,27 +601,7 @@ def open_predefined_scenario(preset: str):
 
 
 def get_display_scenario_label():
-    scenario_name = str(st.session_state.get("current_scenario", "Scenario A")).strip() or "Scenario A"
-    scope = st.session_state.get("scenario_scope", SCENARIO_SCOPE_TOP)
-    mode = st.session_state.get("config_mode", "optimization")
-
-    if scope == SCENARIO_SCOPE_ALL:
-        if scenario_name in {"Scenario A", "Scenario B", "Scenario C"}:
-            return "Scenario C"
-        return scenario_name
-
-    if mode == "simulation":
-        if scenario_name in {"Scenario A", "Scenario B"}:
-            return "Scenario B"
-        if scenario_name.endswith("-sim"):
-            return scenario_name
-        return f"{scenario_name}-sim"
-
-    if scenario_name == "Scenario B":
-        return "Scenario A"
-    if scenario_name.endswith("-sim"):
-        return scenario_name[:-4]
-    return scenario_name
+    return str(st.session_state.get("current_scenario", "Scenario A")).strip() or "Scenario A"
 
 
 def build_coherence_issues():
@@ -725,102 +714,6 @@ def build_coherence_issues():
     if demo_pair_key not in processed_pairs:
         check_incompatibility_pair("S-03", "S-08")
     return issues
-
-
-def build_output_recipe_dataframe():
-    rows = []
-    is_simulation_mode = st.session_state.get("config_mode") == "simulation"
-    selected_destinations = set(get_selected_destination_tanks())
-    for row in st.session_state.source_tanks:
-        if is_simulation_mode:
-            destination = str(row.get("destination_tank", "")).strip()
-            if not destination:
-                continue
-            if selected_destinations and destination not in selected_destinations:
-                continue
-            transfer_volume = safe_int_input(row.get("transfer_volume"), 0)
-            if transfer_volume <= 0:
-                continue
-            rows.append(
-                {
-                    "Serbatoio sorgente": row["tank"],
-                    "Serbatoio di destinazione": destination,
-                    "Volume trasferito": transfer_volume,
-                    "COD": safe_int_input(row.get("cod"), 0),
-                    "Solventi": safe_int_input(row.get("solvents"), 0),
-                    "Boro": float(row.get("boro", 0) or 0),
-                    "Note": str(row.get("notes", "")).strip() or "\u2014",
-                }
-            )
-            continue
-
-        for destination, field in TOP_TRANSFER_FIELDS.items():
-            if selected_destinations and destination not in selected_destinations:
-                continue
-            transfer_volume = safe_int_input(row.get(field), 0)
-            if transfer_volume <= 0:
-                continue
-            rows.append(
-                {
-                    "Serbatoio sorgente": row["tank"],
-                    "Serbatoio di destinazione": destination,
-                    "Volume trasferito": transfer_volume,
-                    "COD": safe_int_input(row.get("cod"), 0),
-                    "Solventi": safe_int_input(row.get("solvents"), 0),
-                    "Boro": float(row.get("boro", 0) or 0),
-                    "Note": str(row.get("notes", "")).strip() or "\u2014",
-                }
-            )
-
-    if not rows:
-        fallback_destination = get_selected_destination_tanks()[0] if get_selected_destination_tanks() else "\u2014"
-        for row in st.session_state.source_tanks:
-            if "residuo" in str(row["tank"]).lower():
-                continue
-            qty = safe_int_input(row.get("qty_available"), 0)
-            rows.append(
-                {
-                    "Serbatoio sorgente": row["tank"],
-                    "Serbatoio di destinazione": fallback_destination,
-                    "Volume trasferito": max(5, min(20, qty if qty > 0 else 10)),
-                    "COD": safe_int_input(row.get("cod"), 0),
-                    "Solventi": safe_int_input(row.get("solvents"), 0),
-                    "Boro": float(row.get("boro", 0) or 0),
-                    "Note": "ricetta proposta demo",
-                }
-            )
-            if len(rows) >= 2:
-                break
-
-    return pd.DataFrame(rows)
-
-
-def compute_output_summary(recipe_df: pd.DataFrame):
-    if recipe_df.empty:
-        return {
-            "components": 0,
-            "total_volume": 0,
-            "avg_cod": 0,
-            "avg_solvents": 0,
-            "avg_boro": 0.0,
-        }
-
-    vol = pd.to_numeric(recipe_df["Volume trasferito"], errors="coerce").fillna(0.0)
-    total_volume = int(vol.sum())
-
-    def weighted_metric(column_name: str):
-        values = pd.to_numeric(recipe_df[column_name], errors="coerce").fillna(0.0)
-        if vol.sum() > 0:
-            return float((values * vol).sum() / vol.sum())
-        return float(values.mean()) if len(values) else 0.0
-
-    return {
-        "components": int(len(recipe_df)),
-        "total_volume": total_volume,
-        "avg_cod": int(round(weighted_metric("COD"))),
-        "avg_solvents": int(round(weighted_metric("Solventi"))),
-        "avg_boro": round(weighted_metric("Boro"), 1),
-    }
 
 
 def style_priority_column(col: pd.Series):
@@ -3088,7 +2981,8 @@ with toolbar:
                     st.session_state.config_mode = "simulation"
                     st.session_state.destination_view_mode = "Tutti i serbatoi"
                 else:
-                    st.session_state.config_mode = "optimization"
+                    if st.session_state.get("config_mode") not in {"simulation", "optimization"}:
+                        st.session_state.config_mode = "optimization"
                     st.session_state.destination_view_mode = "Serbatoi TOP"
                 st.session_state.page_mode = "config"
 
