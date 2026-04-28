@@ -17,6 +17,12 @@ TOP_TRANSFER_FIELDS = {
     "TK-127": "transfer_tk127",
 }
 
+SCENARIO_SCOPE_TOP = "top"
+SCENARIO_SCOPE_ALL = "all"
+SCENARIO_PRESET_TOP = "scenario_a_top"
+SCENARIO_PRESET_SIM_TOP = "scenario_b_sim_top"
+SCENARIO_PRESET_ALL = "scenario_c_all"
+
 source_tanks_default = [
     {
         "tank": "S-01", "qty_available": 45, "cod": 52000, "solvents": 780, "boro": 4.2,
@@ -271,7 +277,7 @@ def fmt_int_or_dash(value):
     if is_missing(value):
         return "\u2014"
     try:
-        return int(float(value))
+        return str(int(float(value)))
     except (TypeError, ValueError):
         return "\u2014"
 
@@ -331,9 +337,11 @@ def initialize_state():
     if "cod_reduction_pct" not in st.session_state:
         st.session_state.cod_reduction_pct = 70
     if "page_mode" not in st.session_state:
-        st.session_state.page_mode = "config"
+        st.session_state.page_mode = "home"
     if "config_mode" not in st.session_state:
         st.session_state.config_mode = "optimization"
+    if "scenario_scope" not in st.session_state:
+        st.session_state.scenario_scope = SCENARIO_SCOPE_TOP
     if "destination_view_mode" not in st.session_state:
         st.session_state.destination_view_mode = "Serbatoi TOP"
     if "out_recipe_tk125" not in st.session_state:
@@ -352,6 +360,8 @@ def initialize_state():
         st.session_state.output_compare_scenario = ""
     if "output_has_scenario_a_plus" not in st.session_state:
         st.session_state.output_has_scenario_a_plus = False
+    if "shell_sidebar_open" not in st.session_state:
+        st.session_state.shell_sidebar_open = True
 initialize_state()
 
 
@@ -496,6 +506,113 @@ def apply_simulation_demo_destinations():
 def sync_simulation_destination_mode():
     enforce_destination_tank_rules()
     apply_simulation_demo_destinations()
+
+
+def apply_scenario_scope(scope: str):
+    normalized_scope = scope if scope in {SCENARIO_SCOPE_TOP, SCENARIO_SCOPE_ALL} else SCENARIO_SCOPE_TOP
+    st.session_state.scenario_scope = normalized_scope
+    if normalized_scope == SCENARIO_SCOPE_ALL:
+        st.session_state.destination_view_mode = "Tutti i serbatoi"
+        st.session_state.config_mode = "simulation"
+    else:
+        st.session_state.destination_view_mode = "Serbatoi TOP"
+        if st.session_state.get("config_mode") not in {"simulation", "optimization"}:
+            st.session_state.config_mode = "optimization"
+
+
+def create_new_scenario(scope: str):
+    st.session_state.scenario_counter += 1
+    next_letter = chr(ord("A") + st.session_state.scenario_counter - 1)
+    st.session_state.current_scenario = f"Scenario {next_letter}"
+    st.session_state.destination_tanks = deepcopy(destination_tanks_default)
+    st.session_state.pop("destination_tanks_editor", None)
+    st.session_state.source_tanks = build_empty_source_tanks()
+    st.session_state.simulation_source_tanks = build_empty_source_tanks()
+    st.session_state.selected_row_index = None
+    st.session_state.show_edit_dialog = False
+    st.session_state.show_cod_setting = False
+    st.session_state.cod_reduction_pct = 70
+    st.session_state.pop("abbatt_cod_output", None)
+    st.session_state.out_recipe_tk125 = None
+    st.session_state.out_recipe_tk126 = None
+    st.session_state.out_recipe_b_tk125 = None
+    st.session_state.out_recipe_b_tk126 = None
+    st.session_state.show_add_comp_tk125 = False
+    st.session_state.show_add_comp_tk126 = False
+    st.session_state.output_compare_scenario = ""
+    st.session_state.output_has_scenario_a_plus = False
+    apply_scenario_scope(scope)
+    if st.session_state.scenario_scope == SCENARIO_SCOPE_TOP:
+        st.session_state.config_mode = "optimization"
+    st.session_state.page_mode = "config"
+    enforce_destination_tank_rules()
+    if st.session_state.config_mode == "simulation":
+        sync_simulation_destination_mode()
+
+
+def open_predefined_scenario(preset: str):
+    st.session_state.destination_tanks = deepcopy(destination_tanks_default)
+    st.session_state.pop("destination_tanks_editor", None)
+    st.session_state.source_tanks = deepcopy(source_tanks_default)
+    st.session_state.simulation_source_tanks = build_simulation_source_tanks()
+    st.session_state.selected_row_index = None
+    st.session_state.show_edit_dialog = False
+    st.session_state.show_cod_setting = False
+    st.session_state.cod_reduction_pct = 70
+    st.session_state.pop("abbatt_cod_output", None)
+    st.session_state.out_recipe_tk125 = None
+    st.session_state.out_recipe_tk126 = None
+    st.session_state.out_recipe_b_tk125 = None
+    st.session_state.out_recipe_b_tk126 = None
+    st.session_state.show_add_comp_tk125 = False
+    st.session_state.show_add_comp_tk126 = False
+    st.session_state.output_compare_scenario = ""
+    st.session_state.output_has_scenario_a_plus = False
+
+    if preset == SCENARIO_PRESET_TOP:
+        st.session_state.current_scenario = "Scenario A"
+        apply_scenario_scope(SCENARIO_SCOPE_TOP)
+        st.session_state.config_mode = "optimization"
+        st.session_state.destination_view_mode = "Serbatoi TOP"
+        enforce_destination_tank_rules()
+    elif preset == SCENARIO_PRESET_SIM_TOP:
+        st.session_state.current_scenario = "Scenario B"
+        apply_scenario_scope(SCENARIO_SCOPE_TOP)
+        st.session_state.config_mode = "simulation"
+        st.session_state.destination_view_mode = "Serbatoi TOP"
+        sync_simulation_destination_mode()
+    else:
+        st.session_state.current_scenario = "Scenario C"
+        apply_scenario_scope(SCENARIO_SCOPE_ALL)
+        st.session_state.config_mode = "simulation"
+        st.session_state.destination_view_mode = "Tutti i serbatoi"
+        sync_simulation_destination_mode()
+
+    st.session_state.page_mode = "config"
+
+
+def get_display_scenario_label():
+    scenario_name = str(st.session_state.get("current_scenario", "Scenario A")).strip() or "Scenario A"
+    scope = st.session_state.get("scenario_scope", SCENARIO_SCOPE_TOP)
+    mode = st.session_state.get("config_mode", "optimization")
+
+    if scope == SCENARIO_SCOPE_ALL:
+        if scenario_name in {"Scenario A", "Scenario B", "Scenario C"}:
+            return "Scenario C"
+        return scenario_name
+
+    if mode == "simulation":
+        if scenario_name in {"Scenario A", "Scenario B"}:
+            return "Scenario B"
+        if scenario_name.endswith("-sim"):
+            return scenario_name
+        return f"{scenario_name}-sim"
+
+    if scenario_name == "Scenario B":
+        return "Scenario A"
+    if scenario_name.endswith("-sim"):
+        return scenario_name[:-4]
+    return scenario_name
 
 
 def build_coherence_issues():
@@ -929,6 +1046,7 @@ def edit_source_tank_dialog(row_index: int, dialog_nonce: int):
             st.session_state.show_edit_dialog = False
             st.rerun()
 
+
 st.markdown("""
 <style>
 header[data-testid="stHeader"] {
@@ -940,26 +1058,403 @@ header[data-testid="stHeader"] {
 }
 
 .stApp {
-    background: #dfe5ea;
+    background: #d5d7db;
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
 }
 
 .block-container {
-    max-width: 1500px;
-    padding: 14px;
-    margin-top: 0.3rem;
+    max-width: none;
+    padding: 8px 14px 14px;
+    margin-top: 84px;
+    margin-left: 252px;
+    margin-right: 14px;
     margin-bottom: 0.7rem;
+    border-radius: 0;
+    background: transparent;
+}
+
+.shell-topbar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 48px;
+    background: #ffffff;
+    border-bottom: 1px solid #dce2ea;
+    z-index: 1200;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 12px;
+    min-width: 0;
+}
+
+.shell-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #1f2f4a;
+}
+
+.shell-brand-mark-wrap {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+}
+
+.shell-brand-mark {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: #cd909f;
+    position: relative;
+    overflow: hidden;
+    flex: 0 0 34px;
+}
+
+.shell-brand-mark::before {
+    content: "";
+    position: absolute;
+    top: -8px;
+    left: 8px;
+    width: 14px;
+    height: 50px;
+    border-left: 4px solid #ffffff;
+    border-radius: 28px;
+    transform: rotate(-21deg);
+    box-shadow: 8px 0 0 #ffffff;
+}
+
+.shell-brand-mark-line {
+    width: 34px;
+    height: 4px;
+    border-radius: 1px;
+    background: #cd909f;
+}
+
+.shell-brand-copy {
+    display: inline-flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+}
+
+.shell-brand-text {
+    font-size: 16px;
+    font-weight: 300;
+    letter-spacing: 1.9px;
+    line-height: 1;
+    color: #9aa2ab;
+}
+
+.shell-brand-sub {
+    font-size: 7px;
+    color: #8b949f;
+    letter-spacing: 2.2px;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.shell-top-right {
+    display: flex;
+    align-items: stretch;
+    height: 100%;
+    flex-wrap: nowrap;
+    white-space: nowrap;
+}
+
+.shell-top-sep {
+    width: 1px;
+    background: #e4e9f0;
+}
+
+.shell-top-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 0 10px;
+    flex-wrap: nowrap;
+}
+
+.shell-top-action {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 1px solid #d7dde7;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #f5f7fa;
+    position: relative;
+}
+
+.shell-top-icon {
+    width: 13px;
+    height: 13px;
+    stroke: #8a93a0;
+    fill: none;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.shell-top-icon-fill {
+    fill: #8a93a0;
+    stroke: none;
+}
+
+.shell-top-action-badge {
+    position: absolute;
+    top: -4px;
+    right: -3px;
+    min-width: 13px;
+    height: 13px;
     border-radius: 8px;
-    background: #eef1f4;
+    background: #d63535;
+    color: #fff;
+    font-size: 8px;
+    font-weight: 700;
+    line-height: 13px;
+    text-align: center;
+    padding: 0 2px;
+}
+
+.shell-userbox {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: #506178;
+    padding: 0 12px;
+    white-space: nowrap;
+}
+
+.shell-avatar {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: #3cbf8f;
+    color: #ffffff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.shell-user-meta {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.15;
+}
+
+.shell-user-name {
+    color: #3b4b61;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.shell-user-role {
+    color: #8a96a6;
+    font-size: 11px;
+}
+
+.shell-subtop {
+    position: fixed;
+    top: 48px;
+    left: 240px;
+    right: 0;
+    height: 32px;
+    background: #27447f;
+    z-index: 1100;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 12px;
+    color: #ffffff;
+}
+
+.shell-subtop-title {
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: 0.1px;
+    position: static;
+    padding-bottom: 0;
+}
+
+.shell-subtop-title::after {
+    display: none;
+}
+
+.shell-subtop-path {
+    font-size: 12px;
+    color: #d3dced;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.shell-subtop-homeicon {
+    color: #ffffff;
+    font-size: 12px;
+    line-height: 1;
+}
+
+.shell-sidebar {
+    position: fixed;
+    top: 48px;
+    left: 0;
+    bottom: 0;
+    width: 240px;
+    background: #28467f;
+    border-right: 1px solid #213962;
+    z-index: 1150;
+    overflow-y: auto;
+}
+
+.shell-nav-head {
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: #dce6f7;
+    border-bottom: 1px solid #375388;
+    padding: 0 8px 0 10px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.shell-nav-head-left {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.shell-nav-timer {
+    color: #56b6e6;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.shell-nav-toggle {
+    width: 56px;
+    height: 32px;
+    background: #1b1f29;
+    color: #ffffff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    margin-right: -10px;
+    text-decoration: none;
+}
+
+.shell-menu {
+    padding: 8px 0 14px;
+}
+
+.shell-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #dbe5f6;
+    font-size: 14px;
+    font-weight: 600;
+    padding: 10px 14px 10px 16px;
+    border-left: 3px solid transparent;
+    cursor: default;
+    white-space: nowrap;
+}
+
+.shell-menu-item:hover {
+    background: #33518c;
+}
+
+.shell-menu-item-active {
+    background: #3a5d9b;
+    border-left-color: #61c38f;
+    color: #ffffff;
+}
+
+.shell-menu-icon {
+    width: 18px;
+    min-width: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #f2f6ff;
+}
+
+.shell-menu-icon svg {
+    width: 16px;
+    height: 16px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 1.9;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.shell-menu-icon-fill {
+    fill: currentColor;
+    stroke: none;
+}
+
+.shell-menu-item-label {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.shell-menu-caret {
+    color: #b8c8e3;
+    font-size: 10px;
+}
+
+@media (max-width: 1200px) {
+    .shell-sidebar {
+        width: 220px;
+    }
+
+    .shell-subtop {
+        left: 220px;
+    }
+
+    .block-container {
+        margin-left: 228px;
+    }
+
+    .shell-subtop-title {
+        font-size: 14px;
+    }
+}
+
+@media (max-width: 900px) {
+    .shell-sidebar {
+        display: none;
+    }
+
+    .shell-subtop {
+        left: 0;
+    }
+
+    .block-container {
+        margin-left: 12px;
+        margin-right: 12px;
+    }
 }
 
 .top-titlebar {
     background: #1f4b8f;
     color: #ffffff;
-    font-size: 18px;
+    font-size: 16px;
     font-weight: 700;
     line-height: 1.35;
-    padding: 12px 16px;
+    padding: 9px 14px;
     border-radius: 8px;
     margin-bottom: 10px;
 }
@@ -970,7 +1465,7 @@ header[data-testid="stHeader"] {
 }
 
 .st-key-top_toolbar [data-testid="stHorizontalBlock"] {
-    align-items: center;
+    align-items: flex-start !important;
 }
 
 .st-key-output_toolbar {
@@ -986,16 +1481,19 @@ header[data-testid="stHeader"] {
     border: 1px solid #d9dee6;
     background: white;
     color: #586576;
-    font-size: 12px;
+    font-size: 11.5px;
     font-weight: 600;
     min-height: 32px;
-    padding: 6px 14px;
+    padding: 6px 10px;
     border-radius: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .st-key-top_toolbar [data-testid="stButton"] > button[kind="primary"] {
-    background: #3fbf69;
-    border-color: #35aa5d;
+    background: #2f5bb4;
+    border-color: #244d9a;
     color: #ffffff;
 }
 
@@ -1004,6 +1502,59 @@ header[data-testid="stHeader"] {
     background: #eceff3;
     border-color: #d9dee6;
     color: #9aa5b1;
+}
+
+.st-key-new_scenario_hover_menu,
+.st-key-open_scenario_hover_menu {
+    position: relative;
+}
+
+.st-key-new_scenario_hover_menu [data-testid="stVerticalBlock"],
+.st-key-open_scenario_hover_menu [data-testid="stVerticalBlock"] {
+    gap: 0 !important;
+}
+
+.st-key-new_scenario_hover_menu [data-testid="stElementContainer"],
+.st-key-open_scenario_hover_menu [data-testid="stElementContainer"] {
+    margin-bottom: 0 !important;
+}
+
+.st-key-new_scenario_hover_items,
+.st-key-open_scenario_hover_items {
+    display: none;
+    position: absolute;
+    top: 36px;
+    left: 0;
+    width: 100%;
+    z-index: 1200;
+    border: 1px solid #d9dee6;
+    border-radius: 6px;
+    background: #ffffff;
+    box-shadow: 0 8px 16px rgba(27, 39, 58, 0.12);
+    padding: 4px;
+}
+
+.st-key-new_scenario_hover_menu:hover .st-key-new_scenario_hover_items,
+.st-key-open_scenario_hover_menu:hover .st-key-open_scenario_hover_items {
+    display: block;
+}
+
+.st-key-new_scenario_hover_items [data-testid="stButton"] > button,
+.st-key-open_scenario_hover_items [data-testid="stButton"] > button {
+    border: 0 !important;
+    border-radius: 4px !important;
+    background: #ffffff !important;
+    color: #586576 !important;
+    font-size: 11.5px !important;
+    font-weight: 600 !important;
+    min-height: 30px !important;
+    justify-content: flex-start !important;
+    padding: 6px 8px !important;
+}
+
+.st-key-new_scenario_hover_items [data-testid="stButton"] > button:hover,
+.st-key-open_scenario_hover_items [data-testid="stButton"] > button:hover {
+    background: #eef3fa !important;
 }
 
 .st-key-output_toolbar [data-testid="stButton"] > button {
@@ -1015,6 +1566,14 @@ header[data-testid="stHeader"] {
     min-height: 32px;
     padding: 6px 14px;
     border-radius: 6px;
+}
+
+.st-key-btn_out_mod_scenario [data-testid="stButton"] > button,
+.st-key-btn_out_dup [data-testid="stButton"] > button {
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    padding: 6px 10px !important;
 }
 
 .top-chip {
@@ -1253,16 +1812,21 @@ header[data-testid="stHeader"] {
     padding: 0 12px 0;
 }
 
+.st-key-config_mode_tabs [data-testid="stHorizontalBlock"] {
+    align-items: flex-end;
+}
+
 .st-key-config_mode_tabs [data-testid="stButton"] > button {
     background: transparent;
     border: none;
     border-bottom: 3px solid transparent;
     border-radius: 0;
     color: #8b97a4;
-    font-size: 16px;
+    font-size: 15px;
     font-weight: 600;
-    min-height: 34px;
-    padding: 0 0 6px;
+    min-height: 32px;
+    line-height: 1.2;
+    padding: 0 8px 6px;
     margin-bottom: -1px;
     box-shadow: none;
     white-space: nowrap;
@@ -1296,6 +1860,8 @@ header[data-testid="stHeader"] {
     border-radius: 8px;
     box-shadow: 0 1px 0 rgba(15, 23, 42, 0.03);
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .st-key-mode_actions [data-testid="stButton"] > button:hover:not(:disabled) {
@@ -1326,6 +1892,11 @@ header[data-testid="stHeader"] {
     background: #fff2f2;
     border-color: #eebaba;
     color: #8f2626;
+}
+
+.st-key-btn_add_row_simulation [data-testid="stButton"] > button {
+    font-size: 11.5px;
+    padding: 5px 10px;
 }
 
 .st-key-btn_filters [data-testid="stButton"] > button {
@@ -1700,6 +2271,180 @@ header[data-testid="stHeader"] {
 </style>
 """, unsafe_allow_html=True)
 
+shell_sidebar_open = bool(st.session_state.get("shell_sidebar_open", True))
+shell_sidebar_width = 240 if shell_sidebar_open else 56
+shell_content_margin_left = 252 if shell_sidebar_open else 68
+shell_subtop_left = shell_sidebar_width
+shell_menu_label_display = "inline" if shell_sidebar_open else "none"
+shell_menu_caret_display = "inline" if shell_sidebar_open else "none"
+shell_menu_item_justify = "flex-start" if shell_sidebar_open else "center"
+shell_menu_item_padding = "10px 14px 10px 16px" if shell_sidebar_open else "10px 0"
+shell_nav_head_left_display = "inline-flex" if shell_sidebar_open else "none"
+shell_nav_head_justify = "space-between" if shell_sidebar_open else "center"
+shell_sidebar_icon_width = "18px" if shell_sidebar_open else "auto"
+shell_content_width_px = shell_content_margin_left + 14
+shell_content_margin_top = 66
+shell_toggle_left = max(0, shell_sidebar_width - 56)
+
+st.markdown(
+    f"""
+<style>
+.shell-sidebar {{ width: {shell_sidebar_width}px !important; }}
+.shell-subtop {{ left: {shell_subtop_left}px !important; }}
+.block-container {{
+    margin-left: {shell_content_margin_left}px !important;
+    margin-top: {shell_content_margin_top}px !important;
+    padding-top: 2px !important;
+    width: calc(100vw - {shell_content_width_px}px) !important;
+    max-width: calc(100vw - {shell_content_width_px}px) !important;
+}}
+.shell-nav-head {{ justify-content: {shell_nav_head_justify} !important; }}
+.shell-nav-head-left {{ display: {shell_nav_head_left_display} !important; }}
+.shell-menu-item-label {{ display: {shell_menu_label_display} !important; }}
+.shell-menu-caret {{ display: {shell_menu_caret_display} !important; }}
+.shell-menu-item {{ justify-content: {shell_menu_item_justify} !important; padding: {shell_menu_item_padding} !important; }}
+.shell-menu-icon {{ width: {shell_sidebar_icon_width} !important; }}
+.st-key-shell_sidebar_toggle {{
+    position: fixed;
+    top: 48px;
+    left: {shell_toggle_left}px;
+    width: 56px;
+    height: 32px;
+    z-index: 1305;
+}}
+.st-key-shell_sidebar_toggle [data-testid="stButton"] > button {{
+    width: 56px;
+    min-height: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 0;
+    background: #1b1f29;
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 0;
+    line-height: 1;
+}}
+.st-key-shell_sidebar_toggle [data-testid="stButton"] > button:hover {{
+    background: #151923;
+    color: #ffffff;
+}}
+.st-key-shell_sidebar_toggle [data-testid="stButton"] > button:focus {{
+    box-shadow: none;
+}}
+@media (max-width: 900px) {{
+    .block-container {{
+        margin-left: 12px !important;
+        width: auto !important;
+        max-width: none !important;
+    }}
+    .shell-subtop {{ left: 0 !important; }}
+}}
+</style>
+""",
+    unsafe_allow_html=True,
+)
+
+shell_sidebar_toggle = st.container(key="shell_sidebar_toggle", width="stretch")
+with shell_sidebar_toggle:
+    if st.button("\u2630", key="btn_shell_sidebar_toggle", width="content"):
+        st.session_state.shell_sidebar_open = not shell_sidebar_open
+        st.rerun()
+
+st.markdown(
+    f"""
+    <div class="shell-topbar">
+        <div class="shell-brand">
+            <span class="shell-brand-mark-wrap">
+                <span class="shell-brand-mark"></span>
+                <span class="shell-brand-mark-line"></span>
+            </span>
+            <span class="shell-brand-copy">
+                <span class="shell-brand-text">SKYLINE</span>
+                <span class="shell-brand-sub">INNOVAZIONE DIGITALE</span>
+            </span>
+        </div>
+        <div class="shell-top-right">
+            <span class="shell-top-sep"></span>
+            <div class="shell-top-actions">
+                <span class="shell-top-action">
+                    <svg class="shell-top-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M5 6h14v9H9l-4 3v-3H5z"></path>
+                    </svg>
+                </span>
+            </div>
+            <span class="shell-top-sep"></span>
+            <div class="shell-top-actions">
+                <span class="shell-top-action">
+                    <svg class="shell-top-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <rect x="4" y="6" width="12" height="9" rx="1.5"></rect>
+                        <circle class="shell-top-icon-fill" cx="8" cy="17" r="1.5"></circle>
+                        <circle class="shell-top-icon-fill" cx="14" cy="17" r="1.5"></circle>
+                        <path d="M16 9h4l1 2v4h-5"></path>
+                    </svg>
+                </span>
+                <span class="shell-top-action">
+                    <svg class="shell-top-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <rect x="4" y="6" width="12" height="9" rx="1.5"></rect>
+                        <circle class="shell-top-icon-fill" cx="8" cy="17" r="1.5"></circle>
+                        <circle class="shell-top-icon-fill" cx="14" cy="17" r="1.5"></circle>
+                        <path d="M16 9h4l1 2v4h-5"></path>
+                        <path d="M7 10l2 2 3-3"></path>
+                    </svg>
+                </span>
+                <span class="shell-top-action">
+                    <svg class="shell-top-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M5 15a7 7 0 0 1 10 0"></path>
+                        <path d="M8 12a4.5 4.5 0 0 1 6 0"></path>
+                        <path d="M11.5 9.5a2 2 0 0 1 1 0"></path>
+                        <path d="M5 6l14 12"></path>
+                    </svg>
+                </span>
+                <span class="shell-top-action">
+                    <svg class="shell-top-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M12 5a4 4 0 0 1 4 4v3.5l1.7 2.2H6.3L8 12.5V9a4 4 0 0 1 4-4z"></path>
+                        <path d="M10 18a2 2 0 0 0 4 0"></path>
+                    </svg>
+                    <span class="shell-top-action-badge">5</span>
+                </span>
+            </div>
+            <span class="shell-top-sep"></span>
+            <div class="shell-top-actions">
+                <span class="shell-top-action">
+                    <svg class="shell-top-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="12" cy="12" r="6"></circle>
+                        <circle cx="12" cy="12" r="2.2"></circle>
+                        <path d="M12 3v3M12 18v3M3 12h3M18 12h3"></path>
+                    </svg>
+                </span>
+            </div>
+        </div>
+    </div>
+    <div class="shell-sidebar">
+        <div class="shell-nav-head">
+            <span class="shell-nav-head-left"><span>Navigation</span><span class="shell-nav-timer">Toggle timer</span></span>
+            <span class="shell-nav-toggle"></span>
+        </div>
+        <div class="shell-menu">
+            <div class="shell-menu-item"><span class="shell-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-7 9 7"></path><path d="M5 10v10h14V10"></path><path d="M10 20v-6h4v6"></path></svg></span><span class="shell-menu-item-label">Home</span></div>
+            <div class="shell-menu-item"><span class="shell-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="1.5"></rect><path d="M8 20h8M12 16v4"></path></svg></span><span class="shell-menu-item-label">Sinottico</span></div>
+            <div class="shell-menu-item"><span class="shell-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4a4 4 0 0 1 4 4v3.5l1.8 2.3H6.2L8 11.5V8a4 4 0 0 1 4-4z"></path><path d="M10.5 18a1.5 1.5 0 0 0 3 0"></path></svg></span><span class="shell-menu-item-label">Storico eventi/allarmi</span></div>
+            <div class="shell-menu-item"><span class="shell-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="11" height="8" rx="1.5"></rect><path d="M14 9h4l3 2.5V15h-7"></path><circle class="shell-menu-icon-fill" cx="8" cy="16.5" r="1.7"></circle><circle class="shell-menu-icon-fill" cx="18" cy="16.5" r="1.7"></circle></svg></span><span class="shell-menu-item-label">Gestione transiti</span><span class="shell-menu-caret">&#9662;</span></div>
+            <div class="shell-menu-item"><span class="shell-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="11" height="8" rx="1.5"></rect><path d="M14 9h4l3 2.5V15h-7"></path><circle class="shell-menu-icon-fill" cx="8" cy="16.5" r="1.7"></circle><circle class="shell-menu-icon-fill" cx="18" cy="16.5" r="1.7"></circle></svg></span><span class="shell-menu-item-label">Varco carrabile</span><span class="shell-menu-caret">&#9662;</span></div>
+            <div class="shell-menu-item"><span class="shell-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6h14v9H9l-4 3v-3H5z"></path></svg></span><span class="shell-menu-item-label">Notifiche</span><span class="shell-menu-caret">&#9662;</span></div>
+            <div class="shell-menu-item"><span class="shell-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 2.8v2.4M12 18.8v2.4M4.9 4.9l1.7 1.7M17.4 17.4l1.7 1.7M2.8 12h2.4M18.8 12h2.4M4.9 19.1l1.7-1.7M17.4 6.6l1.7-1.7"></path></svg></span><span class="shell-menu-item-label">Configurazioni</span><span class="shell-menu-caret">&#9662;</span></div>
+            <div class="shell-menu-item"><span class="shell-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12"></path><circle class="shell-menu-icon-fill" cx="4.5" cy="6" r="1.2"></circle><circle class="shell-menu-icon-fill" cx="4.5" cy="12" r="1.2"></circle><circle class="shell-menu-icon-fill" cx="4.5" cy="18" r="1.2"></circle></svg></span><span class="shell-menu-item-label">Audit</span></div>
+            <div class="shell-menu-item shell-menu-item-active"><span class="shell-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 3h4"></path><path d="M11 3v5l-5.5 9a2 2 0 0 0 1.7 3h9.6a2 2 0 0 0 1.7-3L13 8V3"></path><path d="M8.5 13h7"></path></svg></span><span class="shell-menu-item-label">Gestione miscele</span></div>
+        </div>
+    </div>
+    <div class="shell-subtop">
+        <span class="shell-subtop-title">SKYsym_Web v.2.2.1.61 - Skyline</span>
+        <span class="shell-subtop-path"><span class="shell-subtop-homeicon">&#8962;</span><span>/ Home</span></span>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
 if st.session_state.page_mode == "output":
     if "abbatt_cod_output" not in st.session_state:
         st.session_state.abbatt_cod_output = int(st.session_state.cod_reduction_pct)
@@ -1710,7 +2455,7 @@ if st.session_state.page_mode == "output":
         {"Componente": "S-01",           "Volume": 18, "COD": 52000, "Solventi": 780, "Boro": 4.2},
         {"Componente": "S-07",           "Volume": 17, "COD": 31000, "Solventi":  95, "Boro": 2.9},
         {"Componente": "S-06",           "Volume":  5, "COD": 59000, "Solventi": 640, "Boro": 3.4},
-        {"Componente": "S-ALTA",         "Volume":  2, "COD":110000, "Solventi":2900, "Boro": 5.1},
+        {"Componente": "S-ALTO",         "Volume":  2, "COD":110000, "Solventi":2900, "Boro": 5.1},
     ]
     _default_tk126 = [
         {"Componente": "Residuo TK-126", "Volume": 10, "COD": 45500, "Solventi": 720, "Boro": 3.8},
@@ -1823,7 +2568,7 @@ if st.session_state.page_mode == "output":
     with output_toolbar:
         left_actions, right_badges = st.columns([3.5, 1.5], gap="small")
         with left_actions:
-            c1, c2, _ = st.columns([1.4, 1.5, 6.1], gap="small")
+            c1, c2, _ = st.columns([1.55, 1.5, 5.95], gap="small")
             with c1:
                 if st.button("Modifica scenario", width="content", key="btn_out_mod_scenario"):
                     st.session_state.page_mode = "config"
@@ -1905,16 +2650,33 @@ if st.session_state.page_mode == "output":
                     if st.session_state.show_add_comp_tk125:
                         _existing_125 = set(st.session_state.out_recipe_tk125["Componente"].tolist())
                         _tank_opts_125 = [t["tank"] for t in st.session_state.source_tanks if t["tank"] not in _existing_125]
-                        _sel_col, _add_col, _ann_col = st.columns([2.5, 1, 1], gap="small")
+                        _volume_opts_125 = list(range(1, 101))
+                        _sel_col, _vol_col, _add_col, _ann_col = st.columns([2.3, 1.1, 1, 1], gap="small")
                         with _sel_col:
-                            _new_tank_125 = st.selectbox("Serbatoio", _tank_opts_125, key="add_comp_sel_tk125", label_visibility="collapsed")
+                            _new_tank_125 = st.selectbox(
+                                "Serbatoio",
+                                _tank_opts_125,
+                                index=None,
+                                placeholder="Seleziona serbatoio",
+                                key="add_comp_sel_tk125",
+                                label_visibility="collapsed",
+                            )
+                        with _vol_col:
+                            _new_vol_125 = st.selectbox(
+                                "Volume nuovo componente TK-125",
+                                options=_volume_opts_125,
+                                index=None,
+                                placeholder="Volume",
+                                key="add_comp_vol_sel_tk125",
+                                label_visibility="collapsed",
+                            )
                         with _add_col:
                             if st.button("Aggiungi", key="btn_add_comp_confirm_tk125"):
                                 _tank_data = next((t for t in st.session_state.source_tanks if t["tank"] == _new_tank_125), None)
-                                if _tank_data:
+                                if _tank_data and _new_vol_125 is not None:
                                     _new_row = pd.DataFrame([{
                                         "Componente": _tank_data["tank"],
-                                        "Volume": 10,
+                                        "Volume": int(_new_vol_125),
                                         "COD": safe_int_input(_tank_data.get("cod")),
                                         "Solventi": safe_int_input(_tank_data.get("solvents")),
                                         "Boro": _tank_data["boro"],
@@ -1924,6 +2686,7 @@ if st.session_state.page_mode == "output":
                                     )
                                     st.session_state.show_add_comp_tk125 = False
                                     st.rerun()
+                                st.warning("Seleziona serbatoio e volume.", icon="\u26a0\ufe0f")
                         with _ann_col:
                             if st.button("Annulla", key="btn_add_comp_cancel_tk125"):
                                 st.session_state.show_add_comp_tk125 = False
@@ -1989,16 +2752,33 @@ if st.session_state.page_mode == "output":
                     if st.session_state.show_add_comp_tk126:
                         _existing_126 = set(st.session_state.out_recipe_tk126["Componente"].tolist())
                         _tank_opts_126 = [t["tank"] for t in st.session_state.source_tanks if t["tank"] not in _existing_126]
-                        _sel_col, _add_col, _ann_col = st.columns([2.5, 1, 1], gap="small")
+                        _volume_opts_126 = list(range(1, 101))
+                        _sel_col, _vol_col, _add_col, _ann_col = st.columns([2.3, 1.1, 1, 1], gap="small")
                         with _sel_col:
-                            _new_tank_126 = st.selectbox("Serbatoio", _tank_opts_126, key="add_comp_sel_tk126", label_visibility="collapsed")
+                            _new_tank_126 = st.selectbox(
+                                "Serbatoio",
+                                _tank_opts_126,
+                                index=None,
+                                placeholder="Seleziona serbatoio",
+                                key="add_comp_sel_tk126",
+                                label_visibility="collapsed",
+                            )
+                        with _vol_col:
+                            _new_vol_126 = st.selectbox(
+                                "Volume nuovo componente TK-126",
+                                options=_volume_opts_126,
+                                index=None,
+                                placeholder="Volume",
+                                key="add_comp_vol_sel_tk126",
+                                label_visibility="collapsed",
+                            )
                         with _add_col:
                             if st.button("Aggiungi", key="btn_add_comp_confirm_tk126"):
                                 _tank_data = next((t for t in st.session_state.source_tanks if t["tank"] == _new_tank_126), None)
-                                if _tank_data:
+                                if _tank_data and _new_vol_126 is not None:
                                     _new_row = pd.DataFrame([{
                                         "Componente": _tank_data["tank"],
-                                        "Volume": 10,
+                                        "Volume": int(_new_vol_126),
                                         "COD": safe_int_input(_tank_data.get("cod")),
                                         "Solventi": safe_int_input(_tank_data.get("solvents")),
                                         "Boro": _tank_data["boro"],
@@ -2008,6 +2788,7 @@ if st.session_state.page_mode == "output":
                                     )
                                     st.session_state.show_add_comp_tk126 = False
                                     st.rerun()
+                                st.warning("Seleziona serbatoio e volume.", icon="\u26a0\ufe0f")
                         with _ann_col:
                             if st.button("Annulla", key="btn_add_comp_cancel_tk126"):
                                 st.session_state.show_add_comp_tk126 = False
@@ -2225,19 +3006,28 @@ if st.session_state.page_mode == "output":
             st.markdown('<div class="left-subpanel-title">Azioni sul risultato</div>', unsafe_allow_html=True)
             st.button("Export Risultati", width="stretch", key="btn_out_export_right")
             st.button("Export Report", width="stretch", key="btn_out_export_report_right")
-            st.button("Conferma ricetta TOP", width="stretch", type="primary", key="btn_out_confirm_right")
+            st.button("Conferma miscele TOP", width="stretch", type="primary", key="btn_out_confirm_right")
 
     st.stop()
 
+scenario_scope = st.session_state.get("scenario_scope", SCENARIO_SCOPE_TOP)
+if scenario_scope not in {SCENARIO_SCOPE_TOP, SCENARIO_SCOPE_ALL}:
+    scenario_scope = SCENARIO_SCOPE_TOP
+st.session_state.scenario_scope = scenario_scope
+
+if scenario_scope == SCENARIO_SCOPE_ALL:
+    st.session_state.config_mode = "simulation"
+    st.session_state.destination_view_mode = "Tutti i serbatoi"
+else:
+    st.session_state.destination_view_mode = "Serbatoi TOP"
+
 config_mode = st.session_state.config_mode if st.session_state.config_mode in {"simulation", "optimization"} else "optimization"
+if scenario_scope == SCENARIO_SCOPE_ALL:
+    config_mode = "simulation"
 st.session_state.config_mode = config_mode
 is_simulation_mode = config_mode == "simulation"
 config_title = "Movimenti tra serbatoi - Simulazione" if is_simulation_mode else "Gestione Miscele - Configurazione"
-scenario_label = (
-    f"{st.session_state.current_scenario}-sim"
-    if is_simulation_mode
-    else st.session_state.current_scenario
-)
+scenario_label = get_display_scenario_label()
 show_plant_badge = not (
     is_simulation_mode
     and st.session_state.get("destination_view_mode") == "Tutti i serbatoi"
@@ -2250,52 +3040,62 @@ st.markdown(
 
 toolbar = st.container(key="top_toolbar", width="stretch")
 with toolbar:
-    left_actions, _ = st.columns([3.7, 1.3], gap="small")
+    left_actions, _ = st.columns([5.8, 0.2], gap="small")
 
     with left_actions:
-        btn_new_col, btn_dup_col, btn_sim_col, btn_run_col, _ = st.columns(
-            [1.3, 1.5, 1.8, 1.9, 3.0],
+        btn_new_col, btn_open_col, btn_dup_col, btn_sim_col, btn_run_col, _ = st.columns(
+            [1.35, 1.7, 1.55, 1.95, 2.1, 2.35],
             gap="small",
         )
 
         with btn_new_col:
-            if st.button("Nuovo scenario", width="content", key="btn_new_scenario"):
-                st.session_state.scenario_counter += 1
-                next_letter = chr(ord("A") + st.session_state.scenario_counter - 1)
-                st.session_state.current_scenario = f"Scenario {next_letter}"
-                st.session_state.destination_tanks = deepcopy(destination_tanks_default)
-                st.session_state.pop("destination_tanks_editor", None)
-                st.session_state.source_tanks = build_empty_source_tanks()
-                st.session_state.simulation_source_tanks = build_simulation_source_tanks()
-                st.session_state.selected_row_index = None
-                st.session_state.show_edit_dialog = False
-                st.session_state.show_cod_setting = False
-                st.session_state.cod_reduction_pct = 70
-                st.session_state.pop("abbatt_cod_output", None)
-                st.session_state.out_recipe_tk125 = None
-                st.session_state.out_recipe_tk126 = None
-                st.session_state.out_recipe_b_tk125 = None
-                st.session_state.out_recipe_b_tk126 = None
-                st.session_state.show_add_comp_tk125 = False
-                st.session_state.show_add_comp_tk126 = False
-                st.session_state.output_compare_scenario = ""
-                st.session_state.output_has_scenario_a_plus = False
-                st.session_state.config_mode = "optimization"
-                st.session_state.page_mode = "config"
+            with st.container(key="new_scenario_hover_menu"):
+                st.button("Nuovo scenario", width="stretch", key="btn_new_scenario_trigger")
+                with st.container(key="new_scenario_hover_items"):
+                    create_top_scenario = st.button("Miscele TOP", width="stretch", key="btn_new_scenario_top")
+                    create_all_scenario = st.button("Tutti i serbatoi", width="stretch", key="btn_new_scenario_all")
+            if create_top_scenario:
+                create_new_scenario(SCENARIO_SCOPE_TOP)
+                st.rerun()
+            if create_all_scenario:
+                create_new_scenario(SCENARIO_SCOPE_ALL)
+                st.rerun()
+
+        with btn_open_col:
+            with st.container(key="open_scenario_hover_menu"):
+                st.button("Apri scenario", width="stretch", key="btn_open_scenario_trigger")
+                with st.container(key="open_scenario_hover_items"):
+                    open_scenario_a = st.button("Scenario A - ottimTOP", width="stretch", key="btn_open_scenario_a")
+                    open_scenario_b = st.button("Scenario B - simulTOP", width="stretch", key="btn_open_scenario_b")
+                    open_scenario_c = st.button("Scenario C - all", width="stretch", key="btn_open_scenario_c")
+            if open_scenario_a:
+                open_predefined_scenario(SCENARIO_PRESET_TOP)
+                st.rerun()
+            if open_scenario_b:
+                open_predefined_scenario(SCENARIO_PRESET_SIM_TOP)
+                st.rerun()
+            if open_scenario_c:
+                open_predefined_scenario(SCENARIO_PRESET_ALL)
+                st.rerun()
 
         with btn_dup_col:
-            if st.button("Duplica scenario", width="content", key="btn_duplicate_scenario"):
+            if st.button("Duplica scenario", width="stretch", key="btn_duplicate_scenario"):
                 st.session_state.scenario_counter += 1
                 next_letter = chr(ord("A") + st.session_state.scenario_counter - 1)
                 st.session_state.current_scenario = f"Scenario {next_letter}"
                 st.session_state.show_edit_dialog = False
-                st.session_state.config_mode = "optimization"
+                if scenario_scope == SCENARIO_SCOPE_ALL:
+                    st.session_state.config_mode = "simulation"
+                    st.session_state.destination_view_mode = "Tutti i serbatoi"
+                else:
+                    st.session_state.config_mode = "optimization"
+                    st.session_state.destination_view_mode = "Serbatoi TOP"
                 st.session_state.page_mode = "config"
 
         with btn_sim_col:
             if st.button(
                 "Esegui simulazione",
-                width="content",
+                width="stretch",
                 type="primary" if st.session_state.config_mode == "simulation" else "secondary",
                 disabled=st.session_state.config_mode != "simulation",
                 key="btn_run_simulation",
@@ -2308,9 +3108,9 @@ with toolbar:
         with btn_run_col:
             if st.button(
                 "Esegui ottimizzazione",
-                width="content",
+                width="stretch",
                 type="primary" if st.session_state.config_mode == "optimization" else "secondary",
-                disabled=st.session_state.config_mode != "optimization",
+                disabled=(st.session_state.config_mode != "optimization") or (scenario_scope == SCENARIO_SCOPE_ALL),
                 key="btn_run_optimization",
             ):
                 st.session_state.config_mode = "optimization"
@@ -2322,6 +3122,9 @@ with toolbar:
                     st.session_state.page_mode = "output"
                     st.session_state.show_edit_dialog = False
                     st.rerun()
+
+if st.session_state.get("page_mode") == "home":
+    st.stop()
 
 left_col, right_col = st.columns([0.82, 2.18], gap="medium")
 
@@ -2341,20 +3144,9 @@ with left_col:
         if is_simulation_mode:
             destination_view_selector = st.container(key="destination_view_selector", width="stretch")
             with destination_view_selector:
+                _scope_label = "Miscele TOP" if scenario_scope == SCENARIO_SCOPE_TOP else "Tutti i serbatoi"
                 st.markdown(
-                    '<div class="left-panel-caption" style="margin:2px 0 4px">Serbatoi da visualizzare</div>',
-                    unsafe_allow_html=True,
-                )
-                st.radio(
-                    "Serbatoi da visualizzare",
-                    options=["Serbatoi TOP", "Tutti i serbatoi"],
-                    horizontal=True,
-                    key="destination_view_mode",
-                    on_change=sync_simulation_destination_mode,
-                    label_visibility="collapsed",
-                )
-                st.markdown(
-                    '<div class="left-panel-caption" style="margin:2px 0 8px">Per ciascun serbatoio si definiscono i limiti di capacità della miscela</div>',
+                    f'<div class="left-panel-caption" style="margin:2px 0 8px">Tipo scenario simulazione: <b>{_scope_label}</b></div>',
                     unsafe_allow_html=True,
                 )
 
@@ -2378,7 +3170,7 @@ with left_col:
             on_change=sync_destination_tanks_from_editor,
         )
 
-        if is_simulation_mode and st.session_state.destination_view_mode == "Tutti i serbatoi":
+        if is_simulation_mode and scenario_scope == SCENARIO_SCOPE_ALL:
             base_tanks = {
                 str(row.get("tank", "")).strip()
                 for row in st.session_state.destination_tanks
@@ -2461,29 +3253,40 @@ with right_col:
 with right_main_box:
     config_mode_tabs = st.container(key="config_mode_tabs", width="stretch")
     with config_mode_tabs:
-        tabs_left, tabs_right = st.columns([4.4, 1.2], gap="small")
+        tabs_left, tabs_right = st.columns([3.9, 1.3], gap="small")
 
         with tabs_left:
-            mode_sim_col, mode_opt_col, _ = st.columns([1.25, 1.35, 8.4], gap="small")
-            with mode_sim_col:
+            if scenario_scope == SCENARIO_SCOPE_ALL:
                 if st.button(
                     "Simulazione",
-                    width="content",
-                    type="primary" if is_simulation_mode else "secondary",
-                    key="btn_cfg_tab_simulation",
+                    width="stretch",
+                    type="primary",
+                    key="btn_cfg_tab_simulation_only",
                 ):
                     st.session_state.config_mode = "simulation"
                     sync_simulation_destination_mode()
                     st.rerun()
-            with mode_opt_col:
-                if st.button(
-                    "Ottimizzazione",
-                    width="content",
-                    type="primary" if not is_simulation_mode else "secondary",
-                    key="btn_cfg_tab_optimization",
-                ):
-                    st.session_state.config_mode = "optimization"
-                    st.rerun()
+            else:
+                mode_sim_col, mode_opt_col = st.columns([1.0, 1.0], gap="medium")
+                with mode_sim_col:
+                    if st.button(
+                        "Simulazione",
+                        width="stretch",
+                        type="primary" if is_simulation_mode else "secondary",
+                        key="btn_cfg_tab_simulation",
+                    ):
+                        st.session_state.config_mode = "simulation"
+                        sync_simulation_destination_mode()
+                        st.rerun()
+                with mode_opt_col:
+                    if st.button(
+                        "Ottimizzazione",
+                        width="stretch",
+                        type="primary" if not is_simulation_mode else "secondary",
+                        key="btn_cfg_tab_optimization",
+                    ):
+                        st.session_state.config_mode = "optimization"
+                        st.rerun()
 
         with tabs_right:
             _, plant_chip_col, scenario_chip_col = st.columns([1.0, 1.0, 1.6], gap="small")
@@ -2626,16 +3429,16 @@ with right_main_box:
         mode_actions = st.container(key="mode_actions", width="stretch")
         with mode_actions:
             if is_simulation_mode:
-                act_left, act_spacer, act_right = st.columns([3.2, 0.4, 1.8], gap="small")
+                act_left, act_spacer, act_right = st.columns([3.8, 0.2, 1.6], gap="small")
             else:
-                act_left, act_spacer, act_right = st.columns([2.4, 1.2, 1.8], gap="small")
+                act_left, act_spacer, act_right = st.columns([3.0, 0.8, 1.7], gap="small")
             with act_left:
                 if is_simulation_mode:
-                    btn_refresh_col, btn_add_col, btn_edit_col, btn_remove_col = st.columns([2.2, 1.8, 1.0, 1.0], gap="small")
+                    btn_refresh_col, btn_add_col, btn_edit_col, btn_remove_col = st.columns([2.5, 2.0, 1.15, 1.15], gap="small")
                 else:
-                    btn_refresh_col, btn_edit_col, btn_remove_col = st.columns([2.0, 1.1, 1.1], gap="small")
+                    btn_refresh_col, btn_edit_col, btn_remove_col = st.columns([2.5, 1.25, 1.25], gap="small")
                 with btn_refresh_col:
-                    refresh_button_width = "stretch" if is_simulation_mode else "content"
+                    refresh_button_width = "stretch"
                     if st.button(
                         "Aggiorna con dati Skysym",
                         width=refresh_button_width,
@@ -2726,8 +3529,14 @@ with right_main_box:
     if grid_tab_status is not None:
         with grid_tab_status:
             sim_rows = []
-            selected_dest_rows = [r for r in st.session_state.destination_tanks if r.get("selected")]
-            for dest in selected_dest_rows:
+            if scenario_scope == SCENARIO_SCOPE_ALL:
+                # In scenario "all", show status for every available destination tank.
+                status_tanks = get_selected_destination_tanks()
+                status_destinations = [{"tank": tank, "cod_range": ""} for tank in status_tanks]
+            else:
+                status_destinations = [r for r in st.session_state.destination_tanks if r.get("selected")]
+
+            for dest in status_destinations:
                 dest_tank = str(dest.get("tank", "")).strip()
                 if not dest_tank:
                     continue
@@ -2790,6 +3599,8 @@ with right_main_box:
 
             if sim_rows:
                 sim_df = pd.DataFrame(sim_rows)
+                if scenario_scope == SCENARIO_SCOPE_ALL and "Esito COD" in sim_df.columns:
+                    sim_df = sim_df.drop(columns=["Esito COD"])
                 st.dataframe(
                     sim_df,
                     width="stretch",
