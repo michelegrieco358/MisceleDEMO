@@ -111,6 +111,52 @@ source_tanks_default = [
 ]
 
 
+weekly_rows_base_default = [
+    {"rifiuto": "Rif. A", "cliente": "Cliente 01", "tipologia": "Bio", "cod_mg_kg": 780, "volume_richiesto": 120, "volume_accettato": 120, "giorno": "Lun"},
+    {"rifiuto": "Rif. B", "cliente": "Cliente 02", "tipologia": "TOP", "cod_mg_kg": 650, "volume_richiesto": 60, "volume_accettato": 45, "giorno": "Mar"},
+    {"rifiuto": "Rif. C", "cliente": "Cliente 03", "tipologia": "Bio", "cod_mg_kg": 820, "volume_richiesto": 95, "volume_accettato": 95, "giorno": "Mer"},
+    {"rifiuto": "Rif. D", "cliente": "Cliente 04", "tipologia": "TOP", "cod_mg_kg": 540, "volume_richiesto": 40, "volume_accettato": 25, "giorno": "Ven"},
+    {"rifiuto": "Rif. E", "cliente": "Cliente 05", "tipologia": "Bio", "cod_mg_kg": 760, "volume_richiesto": 55, "volume_accettato": 55, "giorno": "Gio"},
+    {"rifiuto": "Rif. F", "cliente": "Cliente 06", "tipologia": "TOP", "cod_mg_kg": 610, "volume_richiesto": 30, "volume_accettato": 20, "giorno": "Mar"},
+    {"rifiuto": "Rif. G", "cliente": "Cliente 07", "tipologia": "Bio", "cod_mg_kg": 790, "volume_richiesto": 75, "volume_accettato": 60, "giorno": "Ven"},
+]
+
+
+def build_weekly_rows_sim_default():
+    rows = deepcopy(weekly_rows_base_default)
+    for row in rows:
+        row["volume_accettato"] = safe_int_input(row.get("volume_richiesto"), 0)
+        row["min"] = ""
+        row["max"] = ""
+        row["obbligatoriio"] = ""
+        row["priorita"] = ""
+        row["giorni_ammessi"] = ""
+        row["note"] = ""
+    return rows
+
+
+def build_weekly_rows_opt_default():
+    rows = deepcopy(weekly_rows_base_default)
+    for row in rows:
+        row["volume_accettato"] = ""
+        row["min"] = ""
+        row["max"] = ""
+        row["obbligatoriio"] = ""
+        row["priorita"] = ""
+        row["giorni_ammessi"] = ""
+        row["note"] = ""
+    return rows
+
+
+def get_weekly_rows_key(mode: str):
+    return "weekly_rows_sim" if mode == "simulation" else "weekly_rows_opt"
+
+
+def ensure_weekly_demo_rows():
+    st.session_state.weekly_rows_sim = build_weekly_rows_sim_default()
+    st.session_state.weekly_rows_opt = build_weekly_rows_opt_default()
+
+
 def build_empty_source_tanks():
     empty_rows = []
     for row in source_tanks_default:
@@ -362,7 +408,34 @@ def initialize_state():
         st.session_state.output_has_scenario_a_plus = False
     if "shell_sidebar_open" not in st.session_state:
         st.session_state.shell_sidebar_open = True
+    if "weekly_page_mode" not in st.session_state:
+        st.session_state.weekly_page_mode = "home"
+    if "weekly_config_mode" not in st.session_state:
+        st.session_state.weekly_config_mode = "simulation"
+    if "weekly_scenario_empty" not in st.session_state:
+        st.session_state.weekly_scenario_empty = False
+    if "weekly_rows_sim" not in st.session_state:
+        st.session_state.weekly_rows_sim = build_weekly_rows_sim_default()
+    if "weekly_rows_opt" not in st.session_state:
+        st.session_state.weekly_rows_opt = build_weekly_rows_opt_default()
+    if "weekly_selected_row_index" not in st.session_state:
+        st.session_state.weekly_selected_row_index = None
+    if "weekly_show_edit_dialog" not in st.session_state:
+        st.session_state.weekly_show_edit_dialog = False
+    if "weekly_edit_dialog_nonce" not in st.session_state:
+        st.session_state.weekly_edit_dialog_nonce = 0
 initialize_state()
+
+
+def sync_shell_page_navigation():
+    requested_section = str(st.query_params.get("shell_page", "")).strip().lower()
+    if requested_section == "weekly":
+        st.session_state.page_mode = "weekly_config"
+    elif requested_section == "mix" and st.session_state.get("page_mode") == "weekly_config":
+        st.session_state.page_mode = "config"
+
+
+sync_shell_page_navigation()
 
 
 def sync_destination_tanks_from_editor():
@@ -961,6 +1034,108 @@ def edit_source_tank_dialog(row_index: int, dialog_nonce: int):
             st.rerun()
 
 
+@st.dialog("Modifica conferimento settimanale", width="large")
+def edit_weekly_row_dialog(mode: str, row_index: int, dialog_nonce: int):
+    rows_key = get_weekly_rows_key(mode)
+    weekly_rows = st.session_state.get(rows_key, [])
+    if row_index is None or row_index < 0 or row_index >= len(weekly_rows):
+        st.warning("Nessuna riga valida selezionata.")
+        if st.button("Chiudi", width="content", key=f"weekly_edit_close_{dialog_nonce}"):
+            st.session_state.weekly_show_edit_dialog = False
+            st.rerun()
+        return
+
+    row = weekly_rows[row_index]
+    col_left, col_right = st.columns(2, gap="large")
+
+    with col_left:
+        st.markdown("#### Dati conferimento")
+        rifiuto = st.text_input("Rifiuto", value=str(row.get("rifiuto", "")), key=f"weekly_edit_rifiuto_{dialog_nonce}")
+        tipologia = st.text_input("Tipologia", value=str(row.get("tipologia", "")), key=f"weekly_edit_tipologia_{dialog_nonce}")
+        cod_value = st.number_input(
+            "COD mg/kg",
+            min_value=0,
+            step=1,
+            value=safe_int_input(row.get("cod_mg_kg"), 0),
+            key=f"weekly_edit_cod_{dialog_nonce}",
+        )
+        volume_richiesto = st.number_input(
+            "Volume richiesto",
+            min_value=0,
+            step=1,
+            value=safe_int_input(row.get("volume_richiesto"), 0),
+            key=f"weekly_edit_vol_req_{dialog_nonce}",
+        )
+        giorno_options = ["Lun", "Mar", "Mer", "Gio", "Ven"]
+        giorno_default = str(row.get("giorno", "Lun"))
+        if giorno_default not in giorno_options:
+            giorno_default = "Lun"
+        giorno = st.selectbox(
+            "Giorno",
+            options=giorno_options,
+            index=giorno_options.index(giorno_default),
+            key=f"weekly_edit_day_{dialog_nonce}",
+        )
+
+    with col_right:
+        st.markdown("#### Vincoli e preferenze")
+        if mode == "simulation":
+            st.info("In Simulazione il Volume accettato viene allineato al Volume richiesto.")
+            volume_accettato = volume_richiesto
+            cliente = st.text_input("Cliente", value=str(row.get("cliente", "")), key=f"weekly_edit_cliente_{dialog_nonce}")
+            min_value = str(row.get("min", ""))
+            max_value = str(row.get("max", ""))
+            obbligatoriio = str(row.get("obbligatoriio", ""))
+            priorita = str(row.get("priorita", ""))
+            giorni_ammessi = str(row.get("giorni_ammessi", ""))
+            note = str(row.get("note", ""))
+        else:
+            volume_accettato_default = row.get("volume_accettato", "")
+            try:
+                vol_acc_number = int(float(volume_accettato_default)) if str(volume_accettato_default).strip() else 0
+            except (TypeError, ValueError):
+                vol_acc_number = 0
+            volume_accettato_input = st.number_input(
+                "Volume accettato",
+                min_value=0,
+                step=1,
+                value=vol_acc_number,
+                key=f"weekly_edit_vol_acc_{dialog_nonce}",
+            )
+            volume_accettato = "" if safe_int_input(volume_accettato_input, 0) == 0 else safe_int_input(volume_accettato_input, 0)
+            cliente = str(row.get("cliente", ""))
+            min_value = st.text_input("Min", value=str(row.get("min", "")), key=f"weekly_edit_min_{dialog_nonce}")
+            max_value = st.text_input("Max", value=str(row.get("max", "")), key=f"weekly_edit_max_{dialog_nonce}")
+            obbligatoriio = st.text_input("Obbligatoriio", value=str(row.get("obbligatoriio", "")), key=f"weekly_edit_obbl_{dialog_nonce}")
+            priorita = st.text_input("Priorità", value=str(row.get("priorita", "")), key=f"weekly_edit_prio_{dialog_nonce}")
+            giorni_ammessi = st.text_input("Giorni ammessi", value=str(row.get("giorni_ammessi", "")), key=f"weekly_edit_days_{dialog_nonce}")
+            note = st.text_area("Note", value=str(row.get("note", "")), key=f"weekly_edit_note_{dialog_nonce}")
+
+    cancel_col, save_col, _ = st.columns([1, 1, 2], gap="small")
+    with cancel_col:
+        if st.button("Annulla", width="stretch", key=f"weekly_edit_cancel_{dialog_nonce}"):
+            st.session_state.weekly_show_edit_dialog = False
+            st.rerun()
+
+    with save_col:
+        if st.button("Salva", width="stretch", type="primary", key=f"weekly_edit_save_{dialog_nonce}"):
+            row["rifiuto"] = str(rifiuto).strip()
+            row["cliente"] = str(cliente).strip()
+            row["tipologia"] = str(tipologia).strip()
+            row["cod_mg_kg"] = safe_int_input(cod_value, 0)
+            row["volume_richiesto"] = safe_int_input(volume_richiesto, 0)
+            row["volume_accettato"] = safe_int_input(volume_richiesto, 0) if mode == "simulation" else volume_accettato
+            row["giorno"] = giorno
+            row["min"] = str(min_value).strip()
+            row["max"] = str(max_value).strip()
+            row["obbligatoriio"] = str(obbligatoriio).strip()
+            row["priorita"] = str(priorita).strip()
+            row["giorni_ammessi"] = str(giorni_ammessi).strip()
+            row["note"] = str(note).strip()
+            st.session_state.weekly_show_edit_dialog = False
+            st.rerun()
+
+
 st.markdown("""
 <style>
 header[data-testid="stHeader"] {
@@ -1281,6 +1456,37 @@ header[data-testid="stHeader"] {
     border-left: 3px solid transparent;
     cursor: default;
     white-space: nowrap;
+}
+
+.shell-menu-link {
+    text-decoration: none !important;
+    color: #dbe5f6;
+    display: flex;
+}
+
+.shell-menu-link:visited,
+.shell-menu-link:hover,
+.shell-menu-link:active,
+.shell-menu-link:focus {
+    color: #dbe5f6;
+    text-decoration: none !important;
+}
+
+.shell-menu-item-active.shell-menu-link,
+.shell-menu-item-active.shell-menu-link:visited,
+.shell-menu-item-active.shell-menu-link:hover,
+.shell-menu-item-active.shell-menu-link:active,
+.shell-menu-item-active.shell-menu-link:focus {
+    color: #ffffff;
+    text-decoration: none !important;
+}
+
+.shell-menu-link *,
+.shell-menu-link:hover *,
+.shell-menu-link:visited *,
+.shell-menu-link:active *,
+.shell-menu-link:focus * {
+    text-decoration: none !important;
 }
 
 .shell-menu-item:hover {
@@ -2189,6 +2395,519 @@ header[data-testid="stHeader"] {
     border-color: #35aa5d;
     color: #ffffff;
 }
+
+/* ---- Weekly configuration demo ---- */
+
+.st-key-weekly_top_toolbar {
+    margin: 10px 0 8px;
+    padding: 0;
+}
+
+.st-key-weekly_top_toolbar [data-testid="stHorizontalBlock"] {
+    align-items: flex-start;
+}
+
+.st-key-weekly_top_toolbar [data-testid="stButton"] > button {
+    border: 1px solid #d9dee6;
+    background: #ffffff;
+    color: #586576;
+    font-size: 11.5px;
+    font-weight: 600;
+    min-height: 32px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.st-key-weekly_top_toolbar [data-testid="stButton"] > button[kind="primary"] {
+    background: #2f5bb4;
+    border-color: #244d9a;
+    color: #ffffff;
+}
+
+.st-key-weekly_top_toolbar [data-testid="stButton"] > button:disabled {
+    opacity: 1;
+    background: #eceff3;
+    border-color: #d9dee6;
+    color: #9aa5b1;
+}
+
+.st-key-weekly_new_scenario_hover_menu,
+.st-key-weekly_open_scenario_hover_menu,
+.st-key-weekly_duplicate_scenario_hover_menu {
+    position: relative;
+}
+
+.st-key-weekly_new_scenario_hover_menu [data-testid="stVerticalBlock"],
+.st-key-weekly_open_scenario_hover_menu [data-testid="stVerticalBlock"],
+.st-key-weekly_duplicate_scenario_hover_menu [data-testid="stVerticalBlock"] {
+    gap: 0 !important;
+}
+
+.st-key-weekly_new_scenario_hover_menu [data-testid="stElementContainer"],
+.st-key-weekly_open_scenario_hover_menu [data-testid="stElementContainer"],
+.st-key-weekly_duplicate_scenario_hover_menu [data-testid="stElementContainer"] {
+    margin-bottom: 0 !important;
+}
+
+.st-key-weekly_new_scenario_hover_items,
+.st-key-weekly_open_scenario_hover_items,
+.st-key-weekly_duplicate_scenario_hover_items {
+    display: none;
+    position: absolute;
+    top: 36px;
+    left: 0;
+    width: 100%;
+    z-index: 1200;
+    border: 1px solid #d9dee6;
+    border-radius: 6px;
+    background: #ffffff;
+    box-shadow: 0 8px 16px rgba(27, 39, 58, 0.12);
+    padding: 4px;
+}
+
+.st-key-weekly_new_scenario_hover_menu:hover .st-key-weekly_new_scenario_hover_items,
+.st-key-weekly_open_scenario_hover_menu:hover .st-key-weekly_open_scenario_hover_items,
+.st-key-weekly_duplicate_scenario_hover_menu:hover .st-key-weekly_duplicate_scenario_hover_items {
+    display: block;
+}
+
+.st-key-weekly_new_scenario_hover_items [data-testid="stButton"] > button,
+.st-key-weekly_open_scenario_hover_items [data-testid="stButton"] > button,
+.st-key-weekly_duplicate_scenario_hover_items [data-testid="stButton"] > button {
+    border: 0 !important;
+    border-radius: 4px !important;
+    background: #ffffff !important;
+    color: #586576 !important;
+    font-size: 11.5px !important;
+    font-weight: 600 !important;
+    min-height: 30px !important;
+    justify-content: flex-start !important;
+    padding: 6px 8px !important;
+}
+
+.st-key-weekly_new_scenario_hover_items [data-testid="stButton"] > button:hover,
+.st-key-weekly_open_scenario_hover_items [data-testid="stButton"] > button:hover,
+.st-key-weekly_duplicate_scenario_hover_items [data-testid="stButton"] > button:hover {
+    background: #eef3fa !important;
+}
+
+.st-key-weekly_left_panel,
+.st-key-weekly_right_main_box {
+    border: 1px solid #d9dee6;
+    border-radius: 12px;
+    background: #ffffff;
+}
+
+.st-key-weekly_left_panel {
+    padding: 0;
+    overflow: hidden;
+}
+
+.st-key-weekly_import_panel,
+.st-key-weekly_rules_panel,
+.st-key-weekly_checks_panel {
+    padding: 0;
+}
+
+.st-key-weekly_import_panel,
+.st-key-weekly_rules_panel {
+    border-bottom: 1px solid #e6ebf2;
+}
+
+.weekly-panel-head {
+    border-bottom: 1px solid #e8edf3;
+    padding: 10px 12px 9px;
+    background: #fafbfd;
+    font-size: 15px;
+    font-weight: 700;
+    color: #334155;
+}
+
+.weekly-panel-body {
+    padding: 10px 12px 12px;
+    font-size: 12.5px;
+    color: #4f5f72;
+}
+
+.st-key-weekly_import_panel_body {
+    padding: 10px 12px 16px;
+}
+
+.st-key-weekly_import_panel_body [data-testid="stHorizontalBlock"] {
+    align-items: center;
+}
+
+.weekly-field-label {
+    color: #334155;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.weekly-import-file-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
+.st-key-weekly_import_file_row [data-testid="stHorizontalBlock"] {
+    align-items: center !important;
+}
+
+.st-key-weekly_import_file_row [data-testid="stVerticalBlock"] {
+    gap: 0 !important;
+}
+
+.st-key-weekly_import_file_row [data-testid="stElementContainer"] {
+    margin-bottom: 0 !important;
+}
+
+.st-key-weekly_import_file_row [data-testid="column"] {
+    display: flex;
+    align-items: center;
+}
+
+.st-key-weekly_import_file_row [data-testid="column"] > div {
+    width: 100%;
+}
+
+.st-key-weekly_import_file_row .stMarkdown,
+.st-key-weekly_import_file_row .stMarkdown p,
+.st-key-weekly_import_file_row [data-testid="stMarkdownContainer"],
+.st-key-weekly_import_file_row [data-testid="stButton"] {
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+.weekly-file-chip {
+    flex: 1;
+    border: 1px solid #d9dee6;
+    border-radius: 8px;
+    min-height: 34px;
+    height: 34px;
+    padding: 6px 12px;
+    background: #f3f6fb;
+    color: #55657a;
+    font-size: 12px;
+    line-height: 1.25;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: flex;
+    align-items: center;
+}
+
+.weekly-import-state {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 10px;
+    margin-bottom: 2px;
+    color: #7d8898;
+    font-size: 14px;
+}
+
+.weekly-status-badge {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    padding: 2px 10px;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.weekly-status-badge-ok {
+    color: #1f8a4f;
+    background: #e3f4e9;
+    border: 1px solid #b7e3c8;
+}
+
+.weekly-status-badge-alert {
+    color: #c34848;
+    background: #ffe9e9;
+    border: 1px solid #f2c0c0;
+}
+
+.weekly-rule {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin: 4px 0;
+}
+
+.weekly-rule-label {
+    color: #334155;
+    font-weight: 600;
+}
+
+.weekly-rule-note {
+    color: #9aa5b1;
+    font-size: 11px;
+    margin-bottom: 2px;
+}
+
+.weekly-rule-value {
+    background: #dce7fa;
+    border: 1px solid #c9d8f0;
+    color: #2452a3;
+    font-weight: 700;
+    border-radius: 999px;
+    padding: 2px 12px;
+    min-width: 60px;
+    text-align: center;
+}
+
+.weekly-issues {
+    margin: 8px 0 12px 18px;
+    padding: 0;
+    color: #56667a;
+    font-size: 12.5px;
+}
+
+.weekly-issues li {
+    margin-bottom: 4px;
+}
+
+.st-key-weekly_import_panel [data-testid="stButton"] > button,
+.st-key-weekly_rules_panel [data-testid="stButton"] > button,
+.st-key-weekly_checks_panel [data-testid="stButton"] > button {
+    border: 1px solid #d9dee6;
+    border-radius: 8px;
+    color: #5c6b7e;
+    background: #ffffff;
+    font-weight: 700;
+    min-height: 31px;
+    padding: 5px 12px;
+    font-size: 12px;
+}
+
+.st-key-weekly_upload_btn [data-testid="stButton"] > button {
+    min-height: 34px;
+    height: 34px;
+    border: 1px solid #d9dee6;
+    border-radius: 10px;
+    background: #ffffff;
+    color: #4f5f72;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+    line-height: 1;
+    margin: 0 !important;
+}
+
+.st-key-weekly_right_main_box {
+    padding: 0;
+    overflow: hidden;
+}
+
+.st-key-weekly_mode_tabs {
+    border-bottom: 1px solid #d9dee6;
+    margin: 0;
+    padding: 0 12px;
+}
+
+.st-key-weekly_mode_tabs [data-testid="stButton"] > button {
+    background: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    border-radius: 0;
+    color: #8b97a4;
+    font-size: 15px;
+    font-weight: 600;
+    min-height: 32px;
+    line-height: 1.2;
+    padding: 0 8px 6px;
+    margin-bottom: -1px;
+    box-shadow: none;
+    white-space: nowrap;
+}
+
+.st-key-weekly_mode_tabs [data-testid="stButton"] > button[kind="primary"] {
+    color: #1f4b8f;
+    font-weight: 700;
+    border-bottom-color: #2f5bb4;
+}
+
+.weekly-section-title {
+    padding: 10px 12px 8px;
+    border-bottom: 1px solid #e7edf5;
+    font-size: 15px;
+    color: #334155;
+}
+
+.weekly-subtitle {
+    padding: 0 12px 8px;
+    font-size: 19px;
+    font-weight: 700;
+    color: #334155;
+}
+
+.weekly-table-wrap {
+    padding: 0 12px 10px;
+    overflow-x: auto;
+}
+
+.weekly-table {
+    width: 100%;
+    border-collapse: collapse;
+    border: 1px solid #d9dee6;
+    font-size: 12px;
+    table-layout: fixed;
+}
+
+.weekly-table th {
+    background: #f1f3f6;
+    color: #1f3048;
+    font-size: 12px;
+    font-weight: 700;
+    text-align: left;
+    padding: 7px 8px;
+    border: 1px solid #d9dee6;
+    white-space: nowrap;
+}
+
+.weekly-table td {
+    color: #44576d;
+    padding: 7px 8px;
+    border: 1px solid #d9dee6;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.weekly-table-sim th:nth-child(1), .weekly-table-sim td:nth-child(1) { width: 72px; }
+.weekly-table-sim th:nth-child(2), .weekly-table-sim td:nth-child(2) { width: 120px; }
+.weekly-table-sim th:nth-child(3), .weekly-table-sim td:nth-child(3) { width: 84px; }
+.weekly-table-sim th:nth-child(4), .weekly-table-sim td:nth-child(4) { width: 118px; }
+.weekly-table-sim th:nth-child(5), .weekly-table-sim td:nth-child(5) { width: 118px; }
+.weekly-table-sim th:nth-child(6), .weekly-table-sim td:nth-child(6) { width: 122px; }
+.weekly-table-sim { min-width: 760px; }
+
+.weekly-table-opt th:nth-child(1), .weekly-table-opt td:nth-child(1) { width: 68px; }
+.weekly-table-opt th:nth-child(2), .weekly-table-opt td:nth-child(2) { width: 86px; }
+.weekly-table-opt th:nth-child(3), .weekly-table-opt td:nth-child(3) { width: 74px; }
+.weekly-table-opt th:nth-child(4), .weekly-table-opt td:nth-child(4) { width: 102px; }
+.weekly-table-opt th:nth-child(5), .weekly-table-opt td:nth-child(5) { width: 102px; }
+.weekly-table-opt th:nth-child(6), .weekly-table-opt td:nth-child(6) { width: 54px; }
+.weekly-table-opt th:nth-child(7), .weekly-table-opt td:nth-child(7) { width: 54px; }
+.weekly-table-opt th:nth-child(8), .weekly-table-opt td:nth-child(8) { width: 108px; }
+.weekly-table-opt th:nth-child(9), .weekly-table-opt td:nth-child(9) { width: 70px; }
+.weekly-table-opt th:nth-child(10), .weekly-table-opt td:nth-child(10) { width: 70px; }
+.weekly-table-opt th:nth-child(11), .weekly-table-opt td:nth-child(11) { width: 108px; }
+.weekly-table-opt { min-width: 1050px; }
+
+.weekly-day-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    padding: 2px 11px;
+    background: #f3e2ba;
+    border: 1px solid #e6cd8f;
+    color: #ae7713;
+    font-weight: 700;
+    min-width: 40px;
+}
+
+.st-key-weekly_summary_box,
+.st-key-weekly_dayload_box {
+    border: 1px solid #d9dee6;
+    border-radius: 10px;
+    background: #ffffff;
+    overflow: hidden;
+}
+
+.weekly-box-head {
+    border-bottom: 1px solid #e8edf3;
+    background: #fafbfd;
+    color: #334155;
+    font-size: 14px;
+    font-weight: 700;
+    padding: 10px 12px 8px;
+}
+
+.weekly-summary-grid {
+    padding: 10px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.weekly-summary-card {
+    border: 1px solid #d9dee6;
+    border-radius: 8px;
+    background: #fbfcfe;
+    padding: 8px 10px;
+}
+
+.weekly-summary-label {
+    color: #9aa5b1;
+    font-size: 11px;
+    margin-bottom: 4px;
+}
+
+.weekly-summary-value {
+    color: #1f4b8f;
+    font-size: 30px;
+    font-weight: 700;
+    line-height: 1.05;
+}
+
+.weekly-summary-value-strong {
+    color: #d48710;
+}
+
+.weekly-dayload-row {
+    padding: 10px;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.weekly-day-card {
+    border: 1px solid #d5deea;
+    border-radius: 10px;
+    background: linear-gradient(180deg, #ffffff 0%, #f7faff 100%);
+    padding: 8px 9px;
+    min-width: 0;
+    box-shadow: 0 1px 0 rgba(15, 23, 42, 0.04);
+}
+
+.weekly-day-name {
+    color: #1f3f6f;
+    font-size: 11px;
+    font-weight: 700;
+    margin-bottom: 3px;
+}
+
+.weekly-day-metrics {
+    color: #1f4b8f;
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1.1;
+    white-space: nowrap;
+}
+
+.weekly-day-metrics span {
+    display: block;
+    color: #51657d;
+    font-size: 13px;
+    font-weight: 700;
+    margin-top: 1px;
+}
+
+.weekly-footnote {
+    color: #96a3b3;
+    font-size: 12px;
+    text-align: right;
+    margin-top: 8px;
+    padding: 0 4px 2px;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -2271,6 +2990,10 @@ with shell_sidebar_toggle:
     if st.button("\u2630", key="btn_shell_sidebar_toggle", width="content"):
         st.session_state.shell_sidebar_open = not shell_sidebar_open
         st.rerun()
+
+is_weekly_page_mode = st.session_state.get("page_mode") == "weekly_config"
+mix_menu_active_class = "shell-menu-item-active" if not is_weekly_page_mode else ""
+weekly_menu_active_class = "shell-menu-item-active" if is_weekly_page_mode else ""
 
 st.markdown(
     f"""
@@ -2355,7 +3078,8 @@ st.markdown(
             <div class="shell-menu-item"><span class="shell-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6h14v9H9l-4 3v-3H5z"></path></svg></span><span class="shell-menu-item-label">Notifiche</span><span class="shell-menu-caret">&#9662;</span></div>
             <div class="shell-menu-item"><span class="shell-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 2.8v2.4M12 18.8v2.4M4.9 4.9l1.7 1.7M17.4 17.4l1.7 1.7M2.8 12h2.4M18.8 12h2.4M4.9 19.1l1.7-1.7M17.4 6.6l1.7-1.7"></path></svg></span><span class="shell-menu-item-label">Configurazioni</span><span class="shell-menu-caret">&#9662;</span></div>
             <div class="shell-menu-item"><span class="shell-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12"></path><circle class="shell-menu-icon-fill" cx="4.5" cy="6" r="1.2"></circle><circle class="shell-menu-icon-fill" cx="4.5" cy="12" r="1.2"></circle><circle class="shell-menu-icon-fill" cx="4.5" cy="18" r="1.2"></circle></svg></span><span class="shell-menu-item-label">Audit</span></div>
-            <div class="shell-menu-item shell-menu-item-active"><span class="shell-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 3h4"></path><path d="M11 3v5l-5.5 9a2 2 0 0 0 1.7 3h9.6a2 2 0 0 0 1.7-3L13 8V3"></path><path d="M8.5 13h7"></path></svg></span><span class="shell-menu-item-label">Gestione miscele</span></div>
+            <a class="shell-menu-item shell-menu-link {mix_menu_active_class}" href="?shell_page=mix" target="_self"><span class="shell-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 3h4"></path><path d="M11 3v5l-5.5 9a2 2 0 0 0 1.7 3h9.6a2 2 0 0 0 1.7-3L13 8V3"></path><path d="M8.5 13h7"></path></svg></span><span class="shell-menu-item-label">Gestione miscele</span></a>
+            <a class="shell-menu-item shell-menu-link {weekly_menu_active_class}" href="?shell_page=weekly" target="_self"><span class="shell-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"></rect><path d="M8 3v4M16 3v4M4 10h16"></path><path d="M8 14h3M13 14h3M8 17h3"></path></svg></span><span class="shell-menu-item-label">Programmazione settimanale</span></a>
         </div>
     </div>
     <div class="shell-subtop">
@@ -2460,6 +3184,16 @@ if st.session_state.page_mode == "output":
     _COD_126_MIN, _COD_126_MAX = 43000, 47000
     _cod_125_ok = _COD_125_MIN <= _cod_125_top <= _COD_125_MAX
     _cod_126_ok = _COD_126_MIN <= _cod_126_top <= _COD_126_MAX
+    _dest_by_tank = {
+        str(row.get("tank", "")).strip(): row
+        for row in st.session_state.destination_tanks
+    }
+    _tk125_cfg = _dest_by_tank.get("TK-125", {})
+    _tk126_cfg = _dest_by_tank.get("TK-126", {})
+    _vmin_125 = safe_int_input(_tk125_cfg.get("v_min"), 40)
+    _vmax_125 = safe_int_input(_tk125_cfg.get("v_max"), 100)
+    _vmin_126 = safe_int_input(_tk126_cfg.get("v_min"), 20)
+    _vmax_126 = safe_int_input(_tk126_cfg.get("v_max"), 100)
 
     def _range_esito(value, min_value, max_value):
         if min_value <= value <= max_value:
@@ -2541,12 +3275,12 @@ if st.session_state.page_mode == "output":
                 tank_125, tank_126 = st.tabs(["TK-125", "TK-126"])
 
                 with tank_125:
-                    st.markdown("""<div class="tank-target-box">
+                    st.markdown(f"""<div class="tank-target-box">
                         <div class="tank-target-row">
                             <span class="tgt-chip">COD target <b>44000 - 48000</b></span>
                             <span class="tgt-chip">Solventi max <b>800</b></span>
-                            <span class="tgt-chip">Vol min <b>40</b></span>
-                            <span class="tgt-chip">Vol max <b>60</b></span>
+                            <span class="tgt-chip">Vol min <b>{_vmin_125}</b></span>
+                            <span class="tgt-chip">Vol max <b>{_vmax_125}</b></span>
                         </div>
                     </div>""", unsafe_allow_html=True)
                     st.markdown('<div class="out-section-label" style="margin-top:10px">Componenti consigliati</div>', unsafe_allow_html=True)
@@ -2643,12 +3377,12 @@ if st.session_state.page_mode == "output":
                                 )
                                 st.rerun()
                 with tank_126:
-                    st.markdown("""<div class="tank-target-box">
+                    st.markdown(f"""<div class="tank-target-box">
                         <div class="tank-target-row">
                             <span class="tgt-chip">COD target <b>43000 - 47000</b></span>
                             <span class="tgt-chip">Solventi max <b>750</b></span>
-                            <span class="tgt-chip">Vol min <b>20</b></span>
-                            <span class="tgt-chip">Vol max <b>40</b></span>
+                            <span class="tgt-chip">Vol min <b>{_vmin_126}</b></span>
+                            <span class="tgt-chip">Vol max <b>{_vmax_126}</b></span>
                         </div>
                     </div>""", unsafe_allow_html=True)
                     st.markdown('<div class="out-section-label" style="margin-top:10px">Componenti consigliati</div>', unsafe_allow_html=True)
@@ -2780,12 +3514,12 @@ if st.session_state.page_mode == "output":
                     tank_125_b, tank_126_b = st.tabs(["TK-125", "TK-126"])
 
                     with tank_125_b:
-                        st.markdown("""<div class="tank-target-box">
+                        st.markdown(f"""<div class="tank-target-box">
                             <div class="tank-target-row">
                                 <span class="tgt-chip">COD target <b>44000 - 48000</b></span>
                                 <span class="tgt-chip">Solventi max <b>800</b></span>
-                                <span class="tgt-chip">Vol min <b>40</b></span>
-                                <span class="tgt-chip">Vol max <b>60</b></span>
+                                <span class="tgt-chip">Vol min <b>{_vmin_125}</b></span>
+                                <span class="tgt-chip">Vol max <b>{_vmax_125}</b></span>
                             </div>
                         </div>""", unsafe_allow_html=True)
                         st.markdown('<div class="out-section-label" style="margin-top:10px">Componenti proposti</div>', unsafe_allow_html=True)
@@ -2810,12 +3544,12 @@ if st.session_state.page_mode == "output":
                         </div>""", unsafe_allow_html=True)
 
                     with tank_126_b:
-                        st.markdown("""<div class="tank-target-box">
+                        st.markdown(f"""<div class="tank-target-box">
                             <div class="tank-target-row">
                                 <span class="tgt-chip">COD target <b>43000 - 47000</b></span>
                                 <span class="tgt-chip">Solventi max <b>750</b></span>
-                                <span class="tgt-chip">Vol min <b>20</b></span>
-                                <span class="tgt-chip">Vol max <b>40</b></span>
+                                <span class="tgt-chip">Vol min <b>{_vmin_126}</b></span>
+                                <span class="tgt-chip">Vol max <b>{_vmax_126}</b></span>
                             </div>
                         </div>""", unsafe_allow_html=True)
                         st.markdown('<div class="out-section-label" style="margin-top:10px">Componenti proposti</div>', unsafe_allow_html=True)
@@ -2928,6 +3662,387 @@ if st.session_state.page_mode == "output":
             st.button("Export Risultati", width="stretch", key="btn_out_export_right")
             st.button("Export Report", width="stretch", key="btn_out_export_report_right")
             st.button("Conferma miscele TOP", width="stretch", type="primary", key="btn_out_confirm_right")
+
+    st.stop()
+
+if st.session_state.get("page_mode") == "weekly_config":
+    st.markdown(
+        '<div class="top-titlebar">Programmazione settimanale - Configurazione scenario</div>',
+        unsafe_allow_html=True,
+    )
+
+    weekly_toolbar = st.container(key="weekly_top_toolbar", width="stretch")
+    with weekly_toolbar:
+        left_actions, _ = st.columns([5.8, 0.2], gap="small")
+        is_weekly_home_mode = st.session_state.get("weekly_page_mode") == "home"
+
+        with left_actions:
+            if is_weekly_home_mode:
+                btn_new_col, btn_open_col, btn_dup_col, _ = st.columns(
+                    [1.35, 1.7, 1.55, 5.9],
+                    gap="small",
+                )
+            else:
+                btn_new_col, btn_open_col, btn_dup_col, btn_sim_col, btn_opt_col, _ = st.columns(
+                    [1.35, 1.7, 1.55, 1.95, 2.1, 2.35],
+                    gap="small",
+                )
+
+            with btn_new_col:
+                with st.container(key="weekly_new_scenario_hover_menu"):
+                    st.button("Nuovo scenario", width="stretch", key="weekly_btn_new_scenario_trigger")
+                    with st.container(key="weekly_new_scenario_hover_items"):
+                        weekly_create_sim = st.button("Simulazione", width="stretch", key="weekly_btn_new_scenario_sim")
+                        weekly_create_opt = st.button("Ottimizzazione", width="stretch", key="weekly_btn_new_scenario_opt")
+                if weekly_create_sim:
+                    # TODO: creare un nuovo scenario settimanale con modalita e dati reali.
+                    st.session_state.weekly_page_mode = "config"
+                    st.session_state.weekly_config_mode = "simulation"
+                    st.session_state.weekly_scenario_empty = True
+                    st.session_state.weekly_rows_sim = []
+                    st.session_state.weekly_rows_opt = []
+                    st.session_state.weekly_selected_row_index = None
+                    st.session_state.weekly_show_edit_dialog = False
+                    st.rerun()
+                if weekly_create_opt:
+                    # TODO: creare un nuovo scenario settimanale con modalita e dati reali.
+                    st.session_state.weekly_page_mode = "config"
+                    st.session_state.weekly_config_mode = "optimization"
+                    st.session_state.weekly_scenario_empty = True
+                    st.session_state.weekly_rows_sim = []
+                    st.session_state.weekly_rows_opt = []
+                    st.session_state.weekly_selected_row_index = None
+                    st.session_state.weekly_show_edit_dialog = False
+                    st.rerun()
+
+            with btn_open_col:
+                with st.container(key="weekly_open_scenario_hover_menu"):
+                    st.button("Apri scenario", width="stretch", key="weekly_btn_open_scenario_trigger")
+                    with st.container(key="weekly_open_scenario_hover_items"):
+                        weekly_open_a = st.button("Scenario A", width="stretch", key="weekly_btn_open_scenario_a")
+                        weekly_open_b = st.button("Scenario B", width="stretch", key="weekly_btn_open_scenario_b")
+                        weekly_open_c = st.button("Scenario C", width="stretch", key="weekly_btn_open_scenario_c")
+                if weekly_open_a or weekly_open_b or weekly_open_c:
+                    # TODO: collegare apertura scenario settimanale a storage reale.
+                    st.session_state.weekly_page_mode = "config"
+                    st.session_state.weekly_scenario_empty = False
+                    ensure_weekly_demo_rows()
+                    st.session_state.weekly_selected_row_index = None
+                    st.session_state.weekly_show_edit_dialog = False
+                    st.rerun()
+
+            with btn_dup_col:
+                with st.container(key="weekly_duplicate_scenario_hover_menu"):
+                    st.button("Duplica scenario", width="stretch", key="weekly_btn_duplicate_scenario_trigger")
+                    with st.container(key="weekly_duplicate_scenario_hover_items"):
+                        weekly_dup_a = st.button("Scenario A", width="stretch", key="weekly_btn_duplicate_scenario_a")
+                        weekly_dup_b = st.button("Scenario B", width="stretch", key="weekly_btn_duplicate_scenario_b")
+                        weekly_dup_c = st.button("Scenario C", width="stretch", key="weekly_btn_duplicate_scenario_c")
+                if weekly_dup_a or weekly_dup_b or weekly_dup_c:
+                    # TODO: collegare duplicazione scenario settimanale a storage reale.
+                    st.session_state.weekly_page_mode = "config"
+                    st.session_state.weekly_scenario_empty = False
+                    ensure_weekly_demo_rows()
+                    st.session_state.weekly_selected_row_index = None
+                    st.session_state.weekly_show_edit_dialog = False
+                    st.rerun()
+
+            if not is_weekly_home_mode:
+                with btn_sim_col:
+                    if st.button(
+                        "Esegui simulazione",
+                        width="stretch",
+                        type="primary" if st.session_state.get("weekly_config_mode") == "simulation" else "secondary",
+                        key="weekly_btn_run_simulation_toolbar",
+                    ):
+                        # TODO: collegare esecuzione simulazione settimanale a logiche reali.
+                        st.session_state.weekly_config_mode = "simulation"
+                        st.rerun()
+
+                with btn_opt_col:
+                    if st.button(
+                        "Esegui ottimizzazione",
+                        width="stretch",
+                        type="primary" if st.session_state.get("weekly_config_mode") == "optimization" else "secondary",
+                        key="weekly_btn_run_optimization_toolbar",
+                    ):
+                        # TODO: collegare esecuzione ottimizzazione settimanale al solver.
+                        st.session_state.weekly_config_mode = "optimization"
+                        st.rerun()
+
+    if st.session_state.get("weekly_page_mode") == "home":
+        st.stop()
+
+    weekly_config_mode = st.session_state.get("weekly_config_mode", "simulation")
+    if weekly_config_mode not in {"simulation", "optimization"}:
+        weekly_config_mode = "simulation"
+        st.session_state.weekly_config_mode = weekly_config_mode
+    weekly_scenario_empty = bool(st.session_state.get("weekly_scenario_empty", False))
+
+    weekly_left_col, weekly_right_col = st.columns([0.9, 2.1], gap="medium")
+
+    with weekly_left_col:
+        with st.container(key="weekly_left_panel", width="stretch"):
+            with st.container(key="weekly_import_panel", width="stretch"):
+                st.markdown('<div class="weekly-panel-head">Import dati</div>', unsafe_allow_html=True)
+                with st.container(key="weekly_import_panel_body", width="stretch"):
+                    st.markdown('<div class="weekly-field-label">File richieste conferimento</div>', unsafe_allow_html=True)
+                    weekly_file_name = "conferimenti_settimana_14.xlsx"
+                    with st.container(key="weekly_import_file_row", width="stretch"):
+                        file_col, upload_col = st.columns([3.0, 1.0], gap="small")
+                        with file_col:
+                            st.markdown(
+                                f'<div class="weekly-file-chip">{weekly_file_name}</div>',
+                                unsafe_allow_html=True,
+                            )
+                        with upload_col:
+                            with st.container(key="weekly_upload_btn", width="stretch"):
+                                if st.button("Upload", width="stretch", key="weekly_btn_upload"):
+                                    # TODO: integrare import dati reale da file e controlli formato.
+                                    st.session_state.weekly_scenario_empty = False
+                                    ensure_weekly_demo_rows()
+                                    st.session_state.weekly_selected_row_index = None
+                                    st.session_state.weekly_show_edit_dialog = False
+                                    st.rerun()
+                    st.markdown(
+                        f"""
+                        <div class="weekly-import-state">
+                            <span>Stato import</span>
+                            <span class="weekly-status-badge {'weekly-status-badge-alert' if weekly_scenario_empty else 'weekly-status-badge-ok'}">{'Non importato' if weekly_scenario_empty else 'Completato'}</span>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+
+            if not weekly_scenario_empty:
+                with st.container(key="weekly_rules_panel", width="stretch"):
+                    st.markdown('<div class="weekly-panel-head">Vincoli giornalieri di scenario</div>', unsafe_allow_html=True)
+                    st.markdown(
+                        """
+                        <div class="weekly-panel-body">
+                            <div class="weekly-rule-note">Default modificabile per tutti i vincoli</div>
+                            <div class="weekly-rule"><span class="weekly-rule-label">Numero max conferimenti/giorno</span><span class="weekly-rule-value">18</span></div>
+                            <div class="weekly-rule"><span class="weekly-rule-label">Volume max/giorno</span><span class="weekly-rule-value">420 t</span></div>
+                            <div class="weekly-rule"><span class="weekly-rule-label">Limite COD/giorno</span><span class="weekly-rule-value">12.500 kg</span></div>
+                            <div class="weekly-rule"><span class="weekly-rule-label">Cod max Scarico (mg/L)</span><span class="weekly-rule-value">160</span></div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+                    if st.button("Altre impostazioni...", width="stretch", key="weekly_btn_other_settings"):
+                        pass
+
+                with st.container(key="weekly_checks_panel", width="stretch"):
+                    st.markdown('<div class="weekly-panel-head">Controlli di coerenza</div>', unsafe_allow_html=True)
+                    st.markdown(
+                        """
+                        <div class="weekly-panel-body">
+                            <span class="weekly-status-badge weekly-status-badge-alert">2 criticita</span>
+                            <ul class="weekly-issues">
+                                <li>Volume conferito mercoledi superiore al limite giornaliero</li>
+                            </ul>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+                    if st.button("Apri dettaglio controlli", width="stretch", key="weekly_btn_open_checks"):
+                        # TODO: aprire dettaglio completo dei controlli di coerenza.
+                        pass
+
+    with weekly_right_col:
+        weekly_right_main_box = st.container(key="weekly_right_main_box", width="stretch")
+        with weekly_right_main_box:
+            with st.container(key="weekly_mode_tabs", width="stretch"):
+                sim_col, opt_col, _ = st.columns([1.0, 1.0, 6.0], gap="small")
+                with sim_col:
+                    if st.button(
+                        "Simulazione",
+                        width="stretch",
+                        type="primary" if weekly_config_mode == "simulation" else "secondary",
+                        key="weekly_btn_tab_simulation",
+                    ):
+                        st.session_state.weekly_config_mode = "simulation"
+                        st.rerun()
+                with opt_col:
+                    if st.button(
+                        "Ottimizzazione",
+                        width="stretch",
+                        type="primary" if weekly_config_mode == "optimization" else "secondary",
+                        key="weekly_btn_tab_optimization",
+                    ):
+                        st.session_state.weekly_config_mode = "optimization"
+                        st.rerun()
+
+            weekly_section_title = (
+                "Conferimenti Settimanali"
+                if weekly_config_mode == "simulation"
+                else "Vincoli e preferenze"
+            )
+            st.markdown(f'<div class="weekly-subtitle">{weekly_section_title}</div>', unsafe_allow_html=True)
+
+            weekly_rows_key = get_weekly_rows_key(weekly_config_mode)
+            weekly_rows = st.session_state.get(weekly_rows_key, [])
+            if not weekly_scenario_empty and not weekly_rows:
+                ensure_weekly_demo_rows()
+                weekly_rows = st.session_state.get(weekly_rows_key, [])
+
+            if not weekly_scenario_empty and weekly_rows:
+                selector_col, edit_col, _ = st.columns([3.5, 1.1, 2.4], gap="small")
+                with selector_col:
+                    default_selected = st.session_state.get("weekly_selected_row_index")
+                    if default_selected is None or default_selected < 0 or default_selected >= len(weekly_rows):
+                        default_selected = 0
+                    selected_weekly_idx = st.selectbox(
+                        "Riga selezionata",
+                        options=list(range(len(weekly_rows))),
+                        index=default_selected,
+                        format_func=lambda i: f"{weekly_rows[i].get('rifiuto', '')} - {weekly_rows[i].get('tipologia', '')} ({weekly_rows[i].get('giorno', '')})",
+                        key="weekly_row_selector",
+                    )
+                    st.session_state.weekly_selected_row_index = selected_weekly_idx
+
+                with edit_col:
+                    st.markdown('<div style="height:22px"></div>', unsafe_allow_html=True)
+                    if st.button("Modifica riga", width="stretch", key="weekly_btn_edit_row"):
+                        st.session_state.weekly_show_edit_dialog = True
+                        st.session_state.weekly_edit_dialog_nonce = int(st.session_state.get("weekly_edit_dialog_nonce", 0)) + 1
+                        st.rerun()
+
+            if weekly_config_mode == "optimization":
+                weekly_table_class = "weekly-table weekly-table-opt"
+                weekly_headers = [
+                    "Rifiuto",
+                    "Tipologia",
+                    "COD mg/kg",
+                    "Volume richiesto",
+                    "Volume accettato",
+                    "Min",
+                    "Max",
+                    "Obbligatoriio",
+                    "Priorità",
+                    "Giorno",
+                    "Giorni ammessi",
+                    "Note",
+                ]
+                weekly_table_rows = "".join(
+                    f"<tr>"
+                    f"<td>{str(row.get('rifiuto', ''))}</td>"
+                    f"<td>{str(row.get('tipologia', ''))}</td>"
+                    f"<td>{safe_int_input(row.get('cod_mg_kg'), 0)}</td>"
+                    f"<td>{safe_int_input(row.get('volume_richiesto'), 0)}</td>"
+                    f"<td>{str(row.get('volume_accettato', ''))}</td>"
+                    f"<td>{str(row.get('min', ''))}</td>"
+                    f"<td>{str(row.get('max', ''))}</td>"
+                    f"<td>{str(row.get('obbligatoriio', ''))}</td>"
+                    f"<td>{str(row.get('priorita', ''))}</td>"
+                    f"<td><span class=\"weekly-day-pill\">{str(row.get('giorno', ''))}</span></td>"
+                    f"<td>{str(row.get('giorni_ammessi', ''))}</td>"
+                    f"<td>{str(row.get('note', ''))}</td>"
+                    f"</tr>"
+                    for row in weekly_rows
+                )
+            else:
+                weekly_table_class = "weekly-table weekly-table-sim"
+                weekly_headers = [
+                    "Rifiuto",
+                    "Cliente",
+                    "Tipologia",
+                    "COD mg/kg",
+                    "Volume richiesto",
+                    "Volume accettato",
+                    "Giorno",
+                ]
+                weekly_table_rows = "".join(
+                    f"<tr>"
+                    f"<td>{str(row.get('rifiuto', ''))}</td>"
+                    f"<td>{str(row.get('cliente', ''))}</td>"
+                    f"<td>{str(row.get('tipologia', ''))}</td>"
+                    f"<td>{safe_int_input(row.get('cod_mg_kg'), 0)}</td>"
+                    f"<td>{safe_int_input(row.get('volume_richiesto'), 0)}</td>"
+                    f"<td>{safe_int_input(row.get('volume_richiesto'), 0)}</td>"
+                    f"<td><span class=\"weekly-day-pill\">{str(row.get('giorno', ''))}</span></td>"
+                    f"</tr>"
+                    for row in weekly_rows
+                )
+
+            if weekly_scenario_empty:
+                weekly_table_rows = ""
+
+            weekly_header_html = "".join(f"<th>{header}</th>" for header in weekly_headers)
+            weekly_table_html = f"""<div class="weekly-table-wrap">
+<table class="{weekly_table_class}">
+<thead>
+<tr>
+{weekly_header_html}
+</tr>
+</thead>
+<tbody>
+{weekly_table_rows}
+</tbody>
+</table>
+</div>"""
+            st.markdown(weekly_table_html, unsafe_allow_html=True)
+
+            if st.session_state.get("weekly_show_edit_dialog") and not weekly_scenario_empty:
+                selected_idx = st.session_state.get("weekly_selected_row_index")
+                if selected_idx is None and weekly_rows:
+                    selected_idx = 0
+                if selected_idx is not None:
+                    edit_weekly_row_dialog(
+                        weekly_config_mode,
+                        int(selected_idx),
+                        int(st.session_state.get("weekly_edit_dialog_nonce", 0)),
+                    )
+
+            if not weekly_scenario_empty:
+                summary_col, dayload_col = st.columns([1.0, 1.9], gap="small")
+                with summary_col:
+                    with st.container(key="weekly_summary_box", width="stretch"):
+                        st.markdown('<div class="weekly-box-head">Sintesi configurazione</div>', unsafe_allow_html=True)
+                        st.markdown(
+                            """
+                            <div class="weekly-summary-grid">
+                                <div class="weekly-summary-card">
+                                    <div class="weekly-summary-label">Rifiuti importati</div>
+                                    <div class="weekly-summary-value">184</div>
+                                </div>
+                                <div class="weekly-summary-card">
+                                    <div class="weekly-summary-label">Conferimenti obbligatori</div>
+                                    <div class="weekly-summary-value">2</div>
+                                </div>
+                                <div class="weekly-summary-card">
+                                    <div class="weekly-summary-label">Giorni con vincoli specifici</div>
+                                    <div class="weekly-summary-value">4</div>
+                                </div>
+                                <div class="weekly-summary-card">
+                                    <div class="weekly-summary-label">Volumi minimi impostati</div>
+                                    <div class="weekly-summary-value weekly-summary-value-strong">125 t</div>
+                                </div>
+                            </div>
+                            """,
+                            unsafe_allow_html=True,
+                        )
+
+                with dayload_col:
+                    with st.container(key="weekly_dayload_box", width="stretch"):
+                        st.markdown('<div class="weekly-box-head">Carico preliminare per giorno</div>', unsafe_allow_html=True)
+                        st.markdown(
+                            """
+                            <div class="weekly-dayload-row">
+                                <div class="weekly-day-card"><div class="weekly-day-name">Lun</div><div class="weekly-day-metrics">14 transiti<span>380 t</span></div></div>
+                                <div class="weekly-day-card"><div class="weekly-day-name">Mar</div><div class="weekly-day-metrics">11 transiti<span>250 t</span></div></div>
+                                <div class="weekly-day-card"><div class="weekly-day-name">Mer</div><div class="weekly-day-metrics">17 transiti<span>410 t</span></div></div>
+                                <div class="weekly-day-card"><div class="weekly-day-name">Gio</div><div class="weekly-day-metrics">13 transiti<span>300 t</span></div></div>
+                                <div class="weekly-day-card"><div class="weekly-day-name">Ven</div><div class="weekly-day-metrics">9 transiti<span>220 t</span></div></div>
+                            </div>
+                            """,
+                            unsafe_allow_html=True,
+                        )
+
+            st.markdown(
+                '<div class="weekly-footnote">Mockup di esempio - Programmazione settimanale / Configurazione scenario</div>',
+                unsafe_allow_html=True,
+            )
 
     st.stop()
 
